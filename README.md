@@ -18,6 +18,10 @@ Writing formal letters repeatedly can be time-consuming and prone to formatting 
 
 🔒 Built for personal/company internal use
 
+<img width="1665" height="928" alt="image" src="https://github.com/user-attachments/assets/0c7c752f-b81c-4de6-bcec-5edf1a15958b" />
+
+Figure : sample 
+
 💡 Purpose
 
 This project was created to simplify routine documentation tasks by allowing users to:
