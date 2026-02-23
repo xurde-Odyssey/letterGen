@@ -3,6 +3,16 @@ import React from 'react';
 const LetterPreview = React.forwardRef(({ template, data, letterpadImage }, ref) => {
     if (!template) return null;
     const isMarketPriceQuotation = template.id === 'market-price-quotation';
+    const signaturePlacement = data.Signature_Block_Placement || 'right';
+    const signaturePlacementMap = {
+        right: { containerClass: 'justify-end', textAlign: 'right', marginRight: '0.35cm', marginTop: '1.75rem' },
+        'up-right': { containerClass: 'justify-end', textAlign: 'right', marginRight: '0.35cm', marginTop: '0.75rem' },
+        'down-right': { containerClass: 'justify-end', textAlign: 'right', marginRight: '0.35cm', marginTop: '2.5rem' },
+        left: { containerClass: 'justify-start', textAlign: 'left', marginLeft: '0.35cm', marginTop: '1.75rem' },
+        'up-left': { containerClass: 'justify-start', textAlign: 'left', marginLeft: '0.35cm', marginTop: '0.75rem' },
+        'down-left': { containerClass: 'justify-start', textAlign: 'left', marginLeft: '0.35cm', marginTop: '2.5rem' },
+    };
+    const signatureLayout = signaturePlacementMap[signaturePlacement] || signaturePlacementMap.right;
 
     return (
         <div className="flex-1 bg-slate-200 p-4 md:p-8 overflow-y-auto h-screen print:h-auto print:bg-white print:p-0">
@@ -84,10 +94,17 @@ const LetterPreview = React.forwardRef(({ template, data, letterpadImage }, ref)
                 )}
 
                 {/* Bottom-right signature/stamp block */}
-                <div className="mt-12 flex justify-end" style={{ marginRight: '-0.35cm' }}>
-                    <div className="w-[7.5cm] text-center text-[12pt]">
+                <div
+                    className={`flex ${signatureLayout.containerClass}`}
+                    style={{
+                        marginTop: signatureLayout.marginTop,
+                        marginRight: signatureLayout.marginRight || undefined,
+                        marginLeft: signatureLayout.marginLeft || undefined,
+                    }}
+                >
+                    <div className="w-[7.2cm] text-[12pt]" style={{ textAlign: signatureLayout.textAlign }}>
                         <div
-                            className="mb-4 text-slate-400 text-xs flex items-end justify-center"
+                            className={`mb-3 text-slate-400 text-xs flex items-end ${signatureLayout.textAlign === 'right' ? 'justify-end ml-auto' : 'justify-start'}`}
                             style={{ width: '6.5cm', height: '4.2cm' }}
                         >
                             {data.Signature_Stamp_Image ? (
@@ -100,13 +117,10 @@ const LetterPreview = React.forwardRef(({ template, data, letterpadImage }, ref)
                                 '[हस्ताक्षर/स्टाम्प]'
                             )}
                         </div>
-                        <p
-                            className="font-semibold border-b-2 border-slate-900 inline-block pb-0.5 mb-0"
-                            style={{ marginRight: '-3cm' }}
-                        >
+                        <p className="font-semibold border-b-2 border-slate-900 inline-block pb-0.5 mb-0">
                             निवेदक
                         </p>
-                        <div className="space-y-1 mt-0" style={{ marginRight: '-3cm' }}>
+                        <div className="space-y-1 mt-0">
                             <p className="font-bold">{data.Your_Name || '..........................'}</p>
                             <p>{data.Your_Company_Name || '................................................'}</p>
                             <p>{data.Company_Address || '................................................'}</p>

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Trash2, Copy, Check, Upload, X, Undo2, Redo2 } from 'lucide-react';
 import { cn } from '../utils/cn';
 import NepaliInputWithSuggestions from './NepaliInputWithSuggestions';
+import { getCurrentNepaliDate } from 'nepali/dates';
 
 const LetterForm = ({
     template,
@@ -16,6 +17,8 @@ const LetterForm = ({
     onRedo,
     canUndo,
     canRedo,
+    onCopyPreviousData,
+    canCopyPreviousData,
 }) => {
     const [copied, setCopied] = useState(false);
 
@@ -84,6 +87,19 @@ const LetterForm = ({
                             <Redo2 className="w-4 h-4" />
                         </button>
                         <button
+                            onClick={onCopyPreviousData}
+                            disabled={!canCopyPreviousData}
+                            className={cn(
+                                'px-2 py-1.5 rounded-lg text-xs font-semibold transition-colors border',
+                                canCopyPreviousData
+                                    ? 'border-brand-200 text-brand-700 hover:bg-brand-50'
+                                    : 'border-slate-200 text-slate-300 cursor-not-allowed'
+                            )}
+                            title="Copy previous letter data"
+                        >
+                            Copy Previous
+                        </button>
+                        <button
                             onClick={onClear}
                             className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
                             title="Clear Form"
@@ -129,9 +145,20 @@ const LetterForm = ({
 
                     return (
                         <div key={field.id} className="space-y-2 group">
-                            <label className="text-sm font-semibold text-slate-700 block transition-colors group-focus-within:text-brand-600">
-                                {field.label}
-                            </label>
+                            <div className="flex items-center justify-between gap-2">
+                                <label className="text-sm font-semibold text-slate-700 block transition-colors group-focus-within:text-brand-600">
+                                    {field.label}
+                                </label>
+                                {field.id === 'Date' && (
+                                    <button
+                                        type="button"
+                                        onClick={() => onChange('Date', getCurrentNepaliDate())}
+                                        className="text-xs px-2 py-1 rounded border border-brand-200 text-brand-700 hover:bg-brand-50"
+                                    >
+                                        आजको मिति
+                                    </button>
+                                )}
+                            </div>
 
                             {field.type === 'select' ? (
                                 <select
@@ -148,6 +175,22 @@ const LetterForm = ({
                                         </option>
                                     ))}
                                 </select>
+                            ) : field.type === 'text' && Array.isArray(field.suggestions) && field.suggestions.length > 0 ? (
+                                <>
+                                    <input
+                                        type="text"
+                                        list={`suggestions-${field.id}`}
+                                        value={fieldValue}
+                                        onChange={(e) => onChange(field.id, e.target.value)}
+                                        placeholder={field.placeholder || `${field.label} प्रविष्ट गर्नुहोस्...`}
+                                        className="w-full p-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none text-sm transition-all font-nepali bg-white"
+                                    />
+                                    <datalist id={`suggestions-${field.id}`}>
+                                        {field.suggestions.map((item) => (
+                                            <option key={item} value={item} />
+                                        ))}
+                                    </datalist>
+                                </>
                             ) : field.type === 'product-list' ? (
                                 <div className="space-y-3">
                                     {(Array.isArray(data[field.id]) ? data[field.id] : []).map((item, index) => (
@@ -231,6 +274,36 @@ const LetterForm = ({
                     <label className="text-sm font-semibold text-slate-700 block">
                         हस्ताक्षर/स्टाम्प फोटो
                     </label>
+
+                    <div className="space-y-2">
+                        <label className="text-xs font-semibold text-slate-600 block">
+                            हस्ताक्षर खण्डको स्थान
+                        </label>
+                        <div className="grid grid-cols-3 gap-2">
+                            {[
+                                { id: 'right', label: 'Right' },
+                                { id: 'up-right', label: 'Up Right' },
+                                { id: 'down-right', label: 'Down Right' },
+                                { id: 'left', label: 'Left' },
+                                { id: 'up-left', label: 'Up Left' },
+                                { id: 'down-left', label: 'Down Left' },
+                            ].map((placement) => (
+                                <button
+                                    key={placement.id}
+                                    type="button"
+                                    onClick={() => onChange('Signature_Block_Placement', placement.id)}
+                                    className={cn(
+                                        'px-2 py-1.5 rounded border text-xs font-semibold transition-colors',
+                                        (data.Signature_Block_Placement || 'right') === placement.id
+                                            ? 'border-brand-300 bg-brand-50 text-brand-700'
+                                            : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                                    )}
+                                >
+                                    {placement.label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
 
                     <div className="flex items-center gap-2">
                         <label className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 text-sm text-slate-700 hover:bg-slate-50 cursor-pointer transition-colors">
