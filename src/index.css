@@ -1,0 +1,43 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-slate-50 text-slate-900 antialiased;
+  }
+}
+
+@layer components {
+  .a4-container {
+    @apply bg-white shadow-2xl mx-auto overflow-hidden relative;
+    width: 210mm;
+    height: 297mm;
+    padding: 25mm 20mm;
+  }
+
+  .letter-content {
+    @apply font-nepali text-[14pt] leading-relaxed text-justify;
+  }
+}
+
+@media print {
+  @page {
+    size: A4;
+    margin: 0;
+  }
+
+  body {
+    @apply bg-white p-0 m-0 shadow-none;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .a4-container {
+    @apply shadow-none p-0 m-0 w-full overflow-visible;
+    height: auto;
+    /* Allow content to flow naturally on print if multiple pages needed, though usually A4 letters are 1 page */
+  }
+}
