@@ -67,6 +67,8 @@ function App() {
     return templateExists ? savedTemplateId : TEMPLATES[0].id;
   });
   const [formData, setFormData] = useState(() => savedDraft?.formData || {});
+  const [templateDrafts, setTemplateDrafts] = useState(() => savedDraft?.templateDrafts || {});
+  const [previousTemplateId, setPreviousTemplateId] = useState(() => savedDraft?.previousTemplateId || '');
   const [companyProfiles, setCompanyProfiles] = useState(initialCompanyProfiles);
   const [selectedCompanyProfileId, setSelectedCompanyProfileId] = useState(() => savedDraft?.selectedCompanyProfileId || '');
   const [defaultCompanyProfileId, setDefaultCompanyProfileId] = useState(() => savedDraft?.defaultCompanyProfileId || '');
@@ -146,6 +148,7 @@ function App() {
   }, [currentUserId]);
 
   const handleTemplateSelect = (id) => {
+    setPreviousTemplateId(activeTemplateId);
     setActiveTemplateId(id);
   };
 
@@ -185,6 +188,28 @@ function App() {
       setFormData(next);
       return prev.slice(1);
     });
+  };
+
+  const handleCopyPreviousLetterData = () => {
+    if (!previousTemplateId) return;
+    const previousData = templateDrafts[previousTemplateId];
+    if (!previousData || typeof previousData !== 'object') return;
+
+    const currentTemplate = TEMPLATES.find((template) => template.id === activeTemplateId);
+    if (!currentTemplate) return;
+
+    const validFieldIds = new Set(currentTemplate.fields.map((field) => field.id));
+    const filteredData = Object.entries(previousData).reduce((acc, [key, value]) => {
+      if (validFieldIds.has(key)) acc[key] = value;
+      return acc;
+    }, {});
+
+    if (Object.keys(filteredData).length === 0) return;
+
+    updateFormData((prev) => ({
+      ...prev,
+      ...filteredData,
+    }));
   };
 
   const handleCompanyProfileSelect = (profileId) => {
@@ -316,15 +341,17 @@ function App() {
         JSON.stringify({
           activeTemplateId,
           formData,
+          templateDrafts,
           selectedCompanyProfileId,
           defaultCompanyProfileId,
+          previousTemplateId,
           savedAt: new Date().toISOString(),
         })
       );
     } catch {
       // Ignore storage errors (private mode/quota restrictions).
     }
-  }, [activeTemplateId, formData, selectedCompanyProfileId, defaultCompanyProfileId]);
+  }, [activeTemplateId, formData, templateDrafts, selectedCompanyProfileId, defaultCompanyProfileId, previousTemplateId]);
 
   useEffect(() => {
     try {
@@ -333,6 +360,14 @@ function App() {
       // Ignore storage errors.
     }
   }, [companyProfiles]);
+
+  useEffect(() => {
+    if (!activeTemplateId) return;
+    setTemplateDrafts((prev) => ({
+      ...prev,
+      [activeTemplateId]: formData,
+    }));
+  }, [activeTemplateId, formData]);
 
   useEffect(() => {
     if (!selectedCompanyProfileId) return;
@@ -397,6 +432,8 @@ function App() {
       const localPayload = {
         activeTemplateId,
         formData,
+        templateDrafts,
+        previousTemplateId,
         companyProfiles,
         selectedCompanyProfileId,
         defaultCompanyProfileId,
@@ -425,6 +462,10 @@ function App() {
           ? cloudPayload.activeTemplateId
           : TEMPLATES[0].id;
         const nextFormData = cloudPayload.formData && typeof cloudPayload.formData === 'object' ? cloudPayload.formData : {};
+        const nextTemplateDrafts = cloudPayload.templateDrafts && typeof cloudPayload.templateDrafts === 'object'
+          ? cloudPayload.templateDrafts
+          : {};
+        const nextPreviousTemplateId = cloudPayload.previousTemplateId || '';
         const nextProfiles = Array.isArray(cloudPayload.companyProfiles) ? cloudPayload.companyProfiles : [];
         const nextSelectedProfileId = cloudPayload.selectedCompanyProfileId || '';
         const nextDefaultProfileId = cloudPayload.defaultCompanyProfileId || '';
@@ -432,6 +473,8 @@ function App() {
 
         setActiveTemplateId(nextTemplateId);
         setFormData(nextFormData);
+        setTemplateDrafts(nextTemplateDrafts);
+        setPreviousTemplateId(nextPreviousTemplateId);
         setCompanyProfiles(nextProfiles);
         setSelectedCompanyProfileId(nextSelectedProfileId);
         setDefaultCompanyProfileId(nextDefaultProfileId);
@@ -446,8 +489,10 @@ function App() {
             JSON.stringify({
               activeTemplateId: nextTemplateId,
               formData: nextFormData,
+              templateDrafts: nextTemplateDrafts,
               selectedCompanyProfileId: nextSelectedProfileId,
               defaultCompanyProfileId: nextDefaultProfileId,
+              previousTemplateId: nextPreviousTemplateId,
               savedAt: cloudUpdatedAt || new Date().toISOString(),
             })
           );
@@ -481,6 +526,8 @@ function App() {
     const payload = {
       activeTemplateId,
       formData,
+      templateDrafts,
+      previousTemplateId,
       companyProfiles,
       selectedCompanyProfileId,
       defaultCompanyProfileId,
@@ -503,6 +550,8 @@ function App() {
     isCloudStateReady,
     activeTemplateId,
     formData,
+    templateDrafts,
+    previousTemplateId,
     companyProfiles,
     selectedCompanyProfileId,
     defaultCompanyProfileId,
@@ -615,6 +664,8 @@ function App() {
           onRedo={handleRedo}
           canUndo={formHistoryPast.length > 0}
           canRedo={formHistoryFuture.length > 0}
+          onCopyPreviousData={handleCopyPreviousLetterData}
+          canCopyPreviousData={Boolean(previousTemplateId && templateDrafts[previousTemplateId])}
         />
 
         <div className="flex-1 flex overflow-hidden">
