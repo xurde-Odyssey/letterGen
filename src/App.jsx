@@ -11,7 +11,9 @@ const LETTERPAD_STORAGE_KEY = 'letter-generator:letterpad:v1';
 const COMPANY_PROFILES_STORAGE_KEY = 'letter-generator:company-profiles:v1';
 const LOCAL_STATE_META_KEY = 'letter-generator:state-meta:v1';
 const SUPABASE_APP_STATE_TABLE = 'app_state';
+const SUPABASE_COMPANY_PROFILES_TABLE = 'company_profiles';
 const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000;
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const loadSavedDraft = () => {
   try {
@@ -49,6 +51,40 @@ const loadLocalStateMeta = () => {
   }
 };
 
+const generateUuid = () => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (char) => {
+    const randomValue = Math.floor(Math.random() * 16);
+    const value = char === 'x' ? randomValue : ((randomValue & 0x3) | 0x8);
+    return value.toString(16);
+  });
+};
+
+const isUuid = (value) => UUID_REGEX.test(String(value || '').trim());
+
+const toCompanyProfileRow = (profile, userId) => ({
+  id: profile.id,
+  user_id: userId,
+  company_name: profile.companyName || '',
+  applicant_name: profile.applicantName || '',
+  company_address: profile.companyAddress || '',
+  pan_no: profile.panNo || '',
+  letterpad_image_base64: profile.letterpadImage || '',
+  signature_stamp_image_base64: profile.signatureStampImage || '',
+});
+
+const fromCompanyProfileRow = (row) => ({
+  id: row.id,
+  companyName: row.company_name || '',
+  applicantName: row.applicant_name || '',
+  companyAddress: row.company_address || '',
+  panNo: row.pan_no || '',
+  letterpadImage: row.letterpad_image_base64 || '',
+  signatureStampImage: row.signature_stamp_image_base64 || '',
+});
+
 function App() {
   const savedDraft = loadSavedDraft();
   const initialCompanyProfiles = loadCompanyProfiles();
@@ -73,6 +109,7 @@ function App() {
   const [selectedCompanyProfileId, setSelectedCompanyProfileId] = useState(() => savedDraft?.selectedCompanyProfileId || '');
   const [defaultCompanyProfileId, setDefaultCompanyProfileId] = useState(() => savedDraft?.defaultCompanyProfileId || '');
   const [letterpadImage, setLetterpadImage] = useState(savedLetterpadImage);
+  const [letterpadError, setLetterpadError] = useState('');
   const [saveStatus, setSaveStatus] = useState('saved');
   const [formHistoryPast, setFormHistoryPast] = useState([]);
   const [formHistoryFuture, setFormHistoryFuture] = useState([]);
@@ -80,10 +117,12 @@ function App() {
     () => savedMeta?.updatedAt || savedDraft?.savedAt || ''
   );
   const [isCloudStateReady, setIsCloudStateReady] = useState(false);
+  const [isCompanyProfilesSyncReady, setIsCompanyProfilesSyncReady] = useState(false);
 
   const activeTemplate = TEMPLATES.find((t) => t.id === activeTemplateId);
   const printRef = useRef(null);
   const inactivityTimerRef = useRef(null);
+  const previousCompanyProfilesRef = useRef(companyProfiles);
   const currentUserId = authSession?.user?.id || null;
 
   const handlePrint = useReactToPrint({
@@ -96,6 +135,7 @@ function App() {
     inactivityTimerRef.current = null;
     await supabase.auth.signOut();
     setIsCloudStateReady(false);
+    setIsCompanyProfilesSyncReady(false);
   };
 
   useEffect(() => {
@@ -115,6 +155,7 @@ function App() {
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setAuthSession(session || null);
       setIsCloudStateReady(false);
+      setIsCompanyProfilesSyncReady(false);
     });
 
     return () => {
@@ -237,7 +278,7 @@ function App() {
 
   const handleAddCompanyProfile = (profileInput) => {
     const profile = {
-      id: `company-${Date.now()}`,
+      id: generateUuid(),
       companyName: profileInput.companyName || '',
       applicantName: profileInput.applicantName || '',
       companyAddress: profileInput.companyAddress || '',
@@ -256,7 +297,7 @@ function App() {
       ...prev,
       {
         ...source,
-        id: `company-${Date.now()}`,
+        id: generateUuid(),
         companyName: `${source.companyName} (Copy)`,
       },
     ]);
@@ -298,10 +339,11 @@ function App() {
   };
 
   const handleLetterpadUpload = (event) => {
+    setLetterpadError('');
     const file = event.target.files?.[0];
     if (!file) return;
     if (!file.type.startsWith('image/')) {
-      window.alert('Please upload a PNG/JPG image.');
+      setLetterpadError('Please upload a PNG/JPG image.');
       return;
     }
 
@@ -312,7 +354,7 @@ function App() {
       try {
         localStorage.setItem(LETTERPAD_STORAGE_KEY, imageData);
       } catch {
-        window.alert('Letterpad image could not be saved locally (storage limit).');
+        setLetterpadError('Letterpad image could not be saved locally (storage limit).');
       }
     };
     reader.readAsDataURL(file);
@@ -321,6 +363,7 @@ function App() {
 
   const handleRemoveLetterpad = () => {
     setLetterpadImage('');
+    setLetterpadError('');
     localStorage.removeItem(LETTERPAD_STORAGE_KEY);
   };
 
@@ -417,6 +460,10 @@ function App() {
 
     const syncInitialState = async () => {
       setSaveStatus('saving');
+      let sourceProfiles = companyProfiles;
+      let sourceSelectedProfileId = selectedCompanyProfileId;
+      let sourceDefaultProfileId = defaultCompanyProfileId;
+
       const { data: cloudState, error } = await supabase
         .from(SUPABASE_APP_STATE_TABLE)
         .select('payload,updated_at')
@@ -426,6 +473,7 @@ function App() {
       if (error) {
         setSaveStatus('error');
         setIsCloudStateReady(true);
+        setIsCompanyProfilesSyncReady(true);
         return;
       }
 
@@ -434,7 +482,6 @@ function App() {
         formData,
         templateDrafts,
         previousTemplateId,
-        companyProfiles,
         selectedCompanyProfileId,
         defaultCompanyProfileId,
         letterpadImage,
@@ -447,74 +494,114 @@ function App() {
           payload: localPayload,
         });
         setSaveStatus(upsertError ? 'error' : 'saved');
-        setIsCloudStateReady(true);
-        return;
-      }
-
-      const cloudPayload = cloudState.payload || {};
-      const cloudUpdatedAt = cloudPayload.updatedAt || cloudState.updated_at || '';
-      const cloudTs = cloudUpdatedAt ? new Date(cloudUpdatedAt).getTime() : 0;
-      const localTs = localUpdatedAt ? new Date(localUpdatedAt).getTime() : 0;
-      const isCloudNewer = cloudTs > localTs;
-
-      if (isCloudNewer) {
-        const nextTemplateId = TEMPLATES.some((t) => t.id === cloudPayload.activeTemplateId)
-          ? cloudPayload.activeTemplateId
-          : TEMPLATES[0].id;
-        const nextFormData = cloudPayload.formData && typeof cloudPayload.formData === 'object' ? cloudPayload.formData : {};
-        const nextTemplateDrafts = cloudPayload.templateDrafts && typeof cloudPayload.templateDrafts === 'object'
-          ? cloudPayload.templateDrafts
-          : {};
-        const nextPreviousTemplateId = cloudPayload.previousTemplateId || '';
-        const nextProfiles = Array.isArray(cloudPayload.companyProfiles) ? cloudPayload.companyProfiles : [];
-        const nextSelectedProfileId = cloudPayload.selectedCompanyProfileId || '';
-        const nextDefaultProfileId = cloudPayload.defaultCompanyProfileId || '';
-        const nextLetterpad = cloudPayload.letterpadImage || '';
-
-        setActiveTemplateId(nextTemplateId);
-        setFormData(nextFormData);
-        setTemplateDrafts(nextTemplateDrafts);
-        setPreviousTemplateId(nextPreviousTemplateId);
-        setCompanyProfiles(nextProfiles);
-        setSelectedCompanyProfileId(nextSelectedProfileId);
-        setDefaultCompanyProfileId(nextDefaultProfileId);
-        setLetterpadImage(nextLetterpad);
-        setLocalUpdatedAt(cloudUpdatedAt || new Date().toISOString());
-        setFormHistoryPast([]);
-        setFormHistoryFuture([]);
-
-        try {
-          localStorage.setItem(
-            DRAFT_STORAGE_KEY,
-            JSON.stringify({
-              activeTemplateId: nextTemplateId,
-              formData: nextFormData,
-              templateDrafts: nextTemplateDrafts,
-              selectedCompanyProfileId: nextSelectedProfileId,
-              defaultCompanyProfileId: nextDefaultProfileId,
-              previousTemplateId: nextPreviousTemplateId,
-              savedAt: cloudUpdatedAt || new Date().toISOString(),
-            })
-          );
-          localStorage.setItem(COMPANY_PROFILES_STORAGE_KEY, JSON.stringify(nextProfiles));
-          if (nextLetterpad) {
-            localStorage.setItem(LETTERPAD_STORAGE_KEY, nextLetterpad);
-          } else {
-            localStorage.removeItem(LETTERPAD_STORAGE_KEY);
-          }
-          localStorage.setItem(LOCAL_STATE_META_KEY, JSON.stringify({ updatedAt: cloudUpdatedAt || new Date().toISOString() }));
-        } catch {
-          // Ignore storage errors.
-        }
       } else {
-        const { error: upsertError } = await supabase.from(SUPABASE_APP_STATE_TABLE).upsert({
-          user_id: currentUserId,
-          payload: localPayload,
-        });
-        setSaveStatus(upsertError ? 'error' : 'saved');
+        const cloudPayload = cloudState.payload || {};
+        const cloudUpdatedAt = cloudPayload.updatedAt || cloudState.updated_at || '';
+        const cloudTs = cloudUpdatedAt ? new Date(cloudUpdatedAt).getTime() : 0;
+        const localTs = localUpdatedAt ? new Date(localUpdatedAt).getTime() : 0;
+        const isCloudNewer = cloudTs > localTs;
+
+        if (isCloudNewer) {
+          const nextTemplateId = TEMPLATES.some((t) => t.id === cloudPayload.activeTemplateId)
+            ? cloudPayload.activeTemplateId
+            : TEMPLATES[0].id;
+          const nextFormData = cloudPayload.formData && typeof cloudPayload.formData === 'object' ? cloudPayload.formData : {};
+          const nextTemplateDrafts = cloudPayload.templateDrafts && typeof cloudPayload.templateDrafts === 'object'
+            ? cloudPayload.templateDrafts
+            : {};
+          const nextPreviousTemplateId = cloudPayload.previousTemplateId || '';
+          const nextSelectedProfileId = cloudPayload.selectedCompanyProfileId || '';
+          const nextDefaultProfileId = cloudPayload.defaultCompanyProfileId || '';
+          const nextLetterpad = cloudPayload.letterpadImage || '';
+          sourceSelectedProfileId = nextSelectedProfileId;
+          sourceDefaultProfileId = nextDefaultProfileId;
+
+          setActiveTemplateId(nextTemplateId);
+          setFormData(nextFormData);
+          setTemplateDrafts(nextTemplateDrafts);
+          setPreviousTemplateId(nextPreviousTemplateId);
+          setSelectedCompanyProfileId(nextSelectedProfileId);
+          setDefaultCompanyProfileId(nextDefaultProfileId);
+          setLetterpadImage(nextLetterpad);
+          setLocalUpdatedAt(cloudUpdatedAt || new Date().toISOString());
+          setFormHistoryPast([]);
+          setFormHistoryFuture([]);
+
+          try {
+            localStorage.setItem(
+              DRAFT_STORAGE_KEY,
+              JSON.stringify({
+                activeTemplateId: nextTemplateId,
+                formData: nextFormData,
+                templateDrafts: nextTemplateDrafts,
+                selectedCompanyProfileId: nextSelectedProfileId,
+                defaultCompanyProfileId: nextDefaultProfileId,
+                previousTemplateId: nextPreviousTemplateId,
+                savedAt: cloudUpdatedAt || new Date().toISOString(),
+              })
+            );
+            if (nextLetterpad) {
+              localStorage.setItem(LETTERPAD_STORAGE_KEY, nextLetterpad);
+            } else {
+              localStorage.removeItem(LETTERPAD_STORAGE_KEY);
+            }
+            localStorage.setItem(LOCAL_STATE_META_KEY, JSON.stringify({ updatedAt: cloudUpdatedAt || new Date().toISOString() }));
+          } catch {
+            // Ignore storage errors.
+          }
+        } else {
+          const { error: upsertError } = await supabase.from(SUPABASE_APP_STATE_TABLE).upsert({
+            user_id: currentUserId,
+            payload: localPayload,
+          });
+          setSaveStatus(upsertError ? 'error' : 'saved');
+        }
       }
 
+      const { data: cloudProfiles, error: profilesReadError } = await supabase
+        .from(SUPABASE_COMPANY_PROFILES_TABLE)
+        .select('id,company_name,applicant_name,company_address,pan_no,letterpad_image_base64,signature_stamp_image_base64,created_at')
+        .eq('user_id', currentUserId)
+        .order('created_at', { ascending: true });
+
+      let resolvedProfiles = [];
+
+      if (!profilesReadError && Array.isArray(cloudProfiles) && cloudProfiles.length > 0) {
+        resolvedProfiles = cloudProfiles.map(fromCompanyProfileRow);
+      } else if (Array.isArray(sourceProfiles) && sourceProfiles.length > 0) {
+        const migrationRows = sourceProfiles.map((profile) =>
+          toCompanyProfileRow(
+            {
+              ...profile,
+              id: isUuid(profile.id) ? profile.id : generateUuid(),
+            },
+            currentUserId
+          )
+        );
+        const { error: migrationError } = await supabase
+          .from(SUPABASE_COMPANY_PROFILES_TABLE)
+          .upsert(migrationRows, { onConflict: 'id' });
+
+        if (!migrationError) {
+          const { data: migratedProfiles } = await supabase
+            .from(SUPABASE_COMPANY_PROFILES_TABLE)
+            .select('id,company_name,applicant_name,company_address,pan_no,letterpad_image_base64,signature_stamp_image_base64,created_at')
+            .eq('user_id', currentUserId)
+            .order('created_at', { ascending: true });
+          resolvedProfiles = Array.isArray(migratedProfiles) ? migratedProfiles.map(fromCompanyProfileRow) : [];
+        }
+      }
+
+      if (resolvedProfiles.length > 0) {
+        setCompanyProfiles(resolvedProfiles);
+        const selectedExists = resolvedProfiles.some((profile) => profile.id === sourceSelectedProfileId);
+        const defaultExists = resolvedProfiles.some((profile) => profile.id === sourceDefaultProfileId);
+        if (!selectedExists) setSelectedCompanyProfileId('');
+        if (!defaultExists) setDefaultCompanyProfileId('');
+      }
+      previousCompanyProfilesRef.current = resolvedProfiles.length > 0 ? resolvedProfiles : sourceProfiles;
       setIsCloudStateReady(true);
+      setIsCompanyProfilesSyncReady(true);
     };
 
     syncInitialState();
@@ -528,7 +615,6 @@ function App() {
       formData,
       templateDrafts,
       previousTemplateId,
-      companyProfiles,
       selectedCompanyProfileId,
       defaultCompanyProfileId,
       letterpadImage,
@@ -559,6 +645,52 @@ function App() {
     localUpdatedAt,
   ]);
 
+  useEffect(() => {
+    if (!currentUserId || !isCompanyProfilesSyncReady) return;
+
+    const syncCompanyProfiles = async () => {
+      const previousProfiles = previousCompanyProfilesRef.current || [];
+      const previousIds = new Set(previousProfiles.map((profile) => profile.id));
+      const nextIds = new Set(companyProfiles.map((profile) => profile.id));
+      const deletedIds = previousProfiles
+        .filter((profile) => !nextIds.has(profile.id))
+        .map((profile) => profile.id);
+
+      if (deletedIds.length > 0) {
+        await supabase
+          .from(SUPABASE_COMPANY_PROFILES_TABLE)
+          .delete()
+          .eq('user_id', currentUserId)
+          .in('id', deletedIds);
+      }
+
+      if (companyProfiles.length > 0) {
+        const upsertRows = companyProfiles.map((profile) =>
+          toCompanyProfileRow(
+            {
+              ...profile,
+              id: isUuid(profile.id) ? profile.id : generateUuid(),
+            },
+            currentUserId
+          )
+        );
+
+        await supabase
+          .from(SUPABASE_COMPANY_PROFILES_TABLE)
+          .upsert(upsertRows, { onConflict: 'id' });
+      } else if (previousIds.size > 0) {
+        await supabase
+          .from(SUPABASE_COMPANY_PROFILES_TABLE)
+          .delete()
+          .eq('user_id', currentUserId);
+      }
+
+      previousCompanyProfilesRef.current = companyProfiles;
+    };
+
+    syncCompanyProfiles();
+  }, [currentUserId, isCompanyProfilesSyncReady, companyProfiles]);
+
   const handleLogin = async (event) => {
     event.preventDefault();
     setLoginError('');
@@ -575,6 +707,32 @@ function App() {
 
     setLoginEmail('');
     setLoginPassword('');
+  };
+
+  const handleChangePassword = async ({ currentPassword, newPassword }) => {
+    const email = authSession?.user?.email;
+    if (!email) {
+      return { success: false, error: 'Could not determine account email. Please log in again.' };
+    }
+
+    const { error: verifyError } = await supabase.auth.signInWithPassword({
+      email,
+      password: currentPassword,
+    });
+
+    if (verifyError) {
+      return { success: false, error: 'Current password is incorrect.' };
+    }
+
+    const { error: updateError } = await supabase.auth.updateUser({
+      password: newPassword,
+    });
+
+    if (updateError) {
+      return { success: false, error: updateError.message || 'Failed to update password.' };
+    }
+
+    return { success: true, error: '' };
   };
 
   if (authLoading) {
@@ -648,6 +806,9 @@ function App() {
         defaultCompanyProfileId={defaultCompanyProfileId}
         onSetDefaultCompanyProfile={handleSetDefaultCompanyProfile}
         onLogout={handleLogout}
+        onChangePassword={handleChangePassword}
+        letterpadError={letterpadError}
+        onDismissLetterpadError={() => setLetterpadError('')}
       />
 
       <div className="flex flex-1 overflow-hidden">
