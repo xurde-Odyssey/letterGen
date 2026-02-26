@@ -205,10 +205,18 @@ function App() {
   };
 
   const handleFieldChange = (fieldId, value) => {
-    updateFormData((prev) => ({
-      ...prev,
-      [fieldId]: value,
-    }));
+    updateFormData((prev) => {
+      const next = {
+        ...prev,
+        [fieldId]: value,
+      };
+
+      if (activeTemplate?.group === 'bidding' && fieldId === 'Contract_Name') {
+        next.Works_Title = value;
+      }
+
+      return next;
+    });
   };
 
   const handleUndo = () => {
@@ -257,15 +265,18 @@ function App() {
     setSelectedCompanyProfileId(profileId);
     const profile = companyProfiles.find((item) => item.id === profileId);
     if (!profile) return;
+    const isBiddingTemplate = activeTemplate?.group === 'bidding';
 
-    updateFormData((prev) => ({
-      ...prev,
-      Your_Company_Name: profile.companyName || prev.Your_Company_Name || '',
-      Your_Name: profile.applicantName || prev.Your_Name || '',
-      Company_Address: profile.companyAddress || prev.Company_Address || '',
-      Pan_No: profile.panNo || prev.Pan_No || '',
-      Signature_Stamp_Image: profile.signatureStampImage || prev.Signature_Stamp_Image || '',
-    }));
+    if (!isBiddingTemplate) {
+      updateFormData((prev) => ({
+        ...prev,
+        Your_Company_Name: profile.companyName || prev.Your_Company_Name || '',
+        Your_Name: profile.applicantName || prev.Your_Name || '',
+        Company_Address: profile.companyAddress || prev.Company_Address || '',
+        Pan_No: profile.panNo || prev.Pan_No || '',
+        Signature_Stamp_Image: profile.signatureStampImage || prev.Signature_Stamp_Image || '',
+      }));
+    }
 
     const nextLetterpad = profile.letterpadImage || '';
     setLetterpadImage(nextLetterpad);
@@ -416,15 +427,19 @@ function App() {
     if (!selectedCompanyProfileId) return;
     const selectedProfile = companyProfiles.find((profile) => profile.id === selectedCompanyProfileId);
     if (!selectedProfile) return;
+    const currentTemplate = TEMPLATES.find((template) => template.id === activeTemplateId);
+    const isBiddingTemplate = currentTemplate?.group === 'bidding';
 
-    updateFormData((prev) => ({
-      ...prev,
-      Your_Company_Name: selectedProfile.companyName || prev.Your_Company_Name || '',
-      Your_Name: selectedProfile.applicantName || prev.Your_Name || '',
-      Company_Address: selectedProfile.companyAddress || prev.Company_Address || '',
-      Pan_No: selectedProfile.panNo || prev.Pan_No || '',
-      Signature_Stamp_Image: selectedProfile.signatureStampImage || prev.Signature_Stamp_Image || '',
-    }));
+    if (!isBiddingTemplate) {
+      updateFormData((prev) => ({
+        ...prev,
+        Your_Company_Name: selectedProfile.companyName || prev.Your_Company_Name || '',
+        Your_Name: selectedProfile.applicantName || prev.Your_Name || '',
+        Company_Address: selectedProfile.companyAddress || prev.Company_Address || '',
+        Pan_No: selectedProfile.panNo || prev.Pan_No || '',
+        Signature_Stamp_Image: selectedProfile.signatureStampImage || prev.Signature_Stamp_Image || '',
+      }));
+    }
 
     const nextLetterpad = selectedProfile.letterpadImage || '';
     setLetterpadImage(nextLetterpad);
@@ -433,7 +448,7 @@ function App() {
     } else {
       localStorage.removeItem(LETTERPAD_STORAGE_KEY);
     }
-  }, [companyProfiles, selectedCompanyProfileId]);
+  }, [companyProfiles, selectedCompanyProfileId, activeTemplateId]);
 
   useEffect(() => {
     if (!selectedCompanyProfileId && defaultCompanyProfileId) {

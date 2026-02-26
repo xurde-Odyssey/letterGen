@@ -1,4 +1,6 @@
-export const TEMPLATES = [
+import { BIDDING_TEMPLATES } from './biddingTemplates';
+
+const NORMAL_TEMPLATES = [
     {
         id: 'vendor-registration',
         title: 'सूची दर्ता',
@@ -174,17 +176,10 @@ ${introParagraph}
     },
     {
         id: 'refund-deposit',
-        title: 'धरौटी फिर्ता',
-        subject: 'धरौटी रकम फिर्ता पाउँ ।',
+        title: 'कार्य सम्पन्न धरौटी रकम फिर्ता पाउँ',
+        subject: 'धरौटी रकम फिर्ता गरिपाऊँ।',
         fields: [
             { id: 'Date', label: 'मिति', type: 'text' },
-            {
-                id: 'Letter_Variant',
-                label: 'नमुना छनोट (Variant)',
-                type: 'select',
-                defaultValue: 'नमुना १',
-                options: ['नमुना १', 'नमुना २'],
-            },
             {
                 id: 'Addressee_Title',
                 label: 'सम्बोधन (Addressee Title)',
@@ -200,32 +195,136 @@ ${introParagraph}
             },
             { id: 'Office_Name', label: 'कार्यालयको नाम', type: 'text' },
             { id: 'Office_Address', label: 'कार्यालयको ठेगाना', type: 'text' },
-            { id: 'Project_Name', label: 'आयोजनाको नाम', type: 'text' },
+            { id: 'Work_Detail', label: 'कामको विवरण', type: 'text' },
+            { id: 'Tender_No', label: 'Tender Number / ठेक्का नं.', type: 'text' },
+            { id: 'Completion_Date', label: 'कार्य सम्पन्न भएको मिति / Completion Date', type: 'text' },
+            { id: 'Your_Name', label: 'तपाईंको नाम', type: 'text' },
+            { id: 'Your_Company_Name', label: 'कम्पनीको नाम', type: 'text' },
+        ],
+        content: (data) => `
+महोदय,
+
+उपरोक्त विषयमा त्यस कार्यालय अन्तर्गतको ${data.Work_Detail || '[कामको विवरण]'} (ठेक्का नं: ${data.Tender_No || '[Tender Number]'}) निर्माण कार्य यस कम्पनीले मिति ${data.Completion_Date || '[कार्य सम्पन्न भएको मिति / Completion Date]'} मा सफलतापूर्वक सम्पन्न गरिसकेको व्यहोरा अवगत नै छ।
+
+उक्त कार्यको त्रुटि सच्याउने अवधि (Defect Liability Period) पनि समाप्त भइसकेको र सो अवधिमा कुनै पनि त्रुटि नदेखिएकोले, हाम्रो बिलबाट कट्टी भई त्यस कार्यालयको धरौटी खातामा जम्मा भएको धरौटी रकम (Retention Money) फिर्ता गरिदिनुहुन अनुरोध गर्दछु।
+
+
+    `,
+    },
+    {
+        id: 'work-completion-recommendation',
+        title: 'कार्य सम्पन्नको सिफारिस सम्बन्धमा',
+        subject: 'कार्य सम्पन्नको सिफारिस सम्बन्धमा ।',
+        fields: [
+            { id: 'Date', label: 'मिति', type: 'text' },
+            {
+                id: 'Addressee_Title',
+                label: 'सम्बोधन (Addressee Title)',
+                type: 'select',
+                options: [
+                    'श्रीमान् कार्यालय प्रमुख ज्यू,',
+                    'श्रीमान् प्रमुख प्रशासकीय अधिकृत ज्यू,',
+                    'श्रीमान् वडा अध्यक्ष ज्यू,',
+                    'श्रीमान् नगर प्रमुख ज्यू,',
+                    'श्रीमान् गाउँपालिका अध्यक्ष ज्यू,',
+                    'श्रीमान् आयोजना प्रमुख ज्यू,',
+                ],
+            },
+            { id: 'Office_Name', label: 'कार्यालयको नाम', type: 'text' },
+            { id: 'Office_Address', label: 'कार्यालयको ठेगाना', type: 'text' },
+            { id: 'Fiscal_Year', label: 'आर्थिक वर्ष', type: 'text', placeholder: '२०८१/८२' },
+            { id: 'Work_Name', label: 'कार्य/योजनाको नाम', type: 'text', placeholder: 'what work' },
+            { id: 'Work_Place', label: 'कार्य स्थान', type: 'text', placeholder: 'place' },
             { id: 'Tender_No', label: 'ठेक्का नं.', type: 'text' },
-            { id: 'Completion_Date', label: 'सम्पन्न मिति', type: 'text' },
-            { id: 'Amount', label: 'रकम अंकमा', type: 'text', placeholder: '१०५०० /-' },
-            { id: 'Amount_In_Words', label: 'रकम अक्षरमा', type: 'text', placeholder: 'दस हजार पाँच सय रुपैंया मात्र /-' },
             { id: 'Your_Name', label: 'निवेदकको नाम', type: 'text' },
             { id: 'Your_Company_Name', label: 'फर्मको नाम', type: 'text' },
+            { id: 'Company_Address', label: 'फर्मको ठेगाना', type: 'text' },
         ],
-        content: (data) => {
-            const variant = data.Letter_Variant || 'नमुना १';
-            if (variant === 'नमुना २') {
-                return `
+        content: (data) => `
 महोदय,
 
-प्रस्तुत विषयमा त्यस कार्यालय अन्तर्गतको ${data.Project_Name || '[आयोजनाको नाम]'} (ठेक्का नं: ${data.Tender_No || '[ठेक्का नं]'}) को कार्य यस फर्मबाट मिति ${data.Completion_Date || '[सम्पन्न मिति]'} मा सम्पन्न गरी आवश्यक दायित्वसमेत पूरा गरिएको छ।
-
-त्रुटी सच्याउने अवधि समेत समाप्त भइसकेकोले धरौटी/रिटेन्सन बापत रहेको रकम रु. ${data.Amount || '[रकम अंकमा]'} (${data.Amount_In_Words || '[रकम अक्षरमा]'}) फिर्ता गरिदिनुहुन विनम्र निवेदन गर्दछु।
-    `;
-            }
-
-            return `
+उपरोक्त सम्बन्धमा यस आ.व. ${data.Fiscal_Year || '[ ]'} को योजना ${data.Work_Name || '[ what work ]'}, ${data.Work_Place || '[ place ]'} ठेक्का न :${data.Tender_No || '[  ]'} को सम्पूर्ण कार्य सम्पन्न भएको हुदा अनुगमन गरि कार्य सम्पन्नको सिफारिस गरिदिनु हुन अनुरोध गर्दछु ।
+    `,
+    },
+    {
+        id: 'bid-security-refund-not-awarded',
+        title: 'बोलपत्र स्वीकृत नभएको अवस्थामा धरौटी फिर्ता',
+        subject: 'बोलपत्रको धरौटी (Bid Security) रकम फिर्ता गरिपाऊँ।',
+        fields: [
+            { id: 'Date', label: 'मिति', type: 'text' },
+            {
+                id: 'Addressee_Title',
+                label: 'सम्बोधन (Addressee Title)',
+                type: 'select',
+                options: [
+                    'श्रीमान् कार्यालय प्रमुख ज्यू,',
+                    'श्रीमान् प्रमुख प्रशासकीय अधिकृत ज्यू,',
+                    'श्रीमान् वडा अध्यक्ष ज्यू,',
+                    'श्रीमान् नगर प्रमुख ज्यू,',
+                    'श्रीमान् गाउँपालिका अध्यक्ष ज्यू,',
+                    'श्रीमान् आयोजना प्रमुख ज्यू,',
+                ],
+            },
+            { id: 'Office_Name', label: 'कार्यालयको नाम', type: 'text' },
+            { id: 'Office_Address', label: 'कार्यालयको ठेगाना', type: 'text' },
+            { id: 'Notice_Date', label: 'सूचना प्रकाशित मिति / Notice Date', type: 'text' },
+            { id: 'Work_Name', label: 'कामको विवरण वा ठेक्काको नाम / Name of Work', type: 'text' },
+            { id: 'Tender_No', label: 'Tender Number / ठेक्का नं.', type: 'text' },
+            { id: 'Your_Company_Name', label: 'तपाईंको कम्पनीको नाम / Your Company Name', type: 'text' },
+            { id: 'Bank_Name', label: 'Bank Name', type: 'text' },
+            { id: 'Deposit_Date', label: 'रकम जम्मा गरेको मिति / Deposit Date', type: 'text' },
+            { id: 'Amount', label: 'रकम अङ्कमा / Amount in numbers', type: 'text' },
+            { id: 'Amount_In_Words', label: 'रकम अक्षरमा / Amount in words', type: 'text' },
+            { id: 'Your_Name', label: 'निवेदकको नाम', type: 'text' },
+            { id: 'Company_Address', label: 'कम्पनीको ठेगाना', type: 'text' },
+        ],
+        content: (data) => `
 महोदय,
 
-उपरोक्त विषयमा यस फर्मले त्यस कार्यालय अन्तर्गतको ${data.Project_Name || '[आयोजनाको नाम]'} (ठेक्का नं: ${data.Tender_No || '[ठेक्का नं]'}) को सम्पूर्ण कार्य मिति ${data.Completion_Date || '[सम्पन्न मिति]'} मा सम्पन्न गरिसकेको र उक्त कार्यको त्रुटी सच्याउने अवधि (Defect Liability Period) समेत समाप्त भइसकेको हुँदा, हाम्रो धरौटी/रिटेन्सन बापतको रकम रु. ${data.Amount || '[रकम अंकमा]'} (${data.Amount_In_Words || '[रकम अक्षरमा]'}) फिर्ता गरिदिनुहुन अनुरोध गर्दछु।
-    `;
-        }
+उपरोक्त विषयमा त्यस कार्यालयद्वारा मिति ${data.Notice_Date || '[सूचना प्रकाशित मिति / Notice Date]'} मा प्रकाशित सूचना अनुसार ${data.Work_Name || '[कामको विवरण वा ठेक्काको नाम / Name of Work]'} (ठेक्का नं: ${data.Tender_No || '[Tender Number]'}) कार्यको लागि यस ${data.Your_Company_Name || '[तपाईंको कम्पनीको नाम / Your Company Name]'} ले पनि बोलपत्र पेस गरेको व्यहोरा अवगत नै छ।
+
+उक्त बोलपत्रको मूल्याङ्कन हुँदा यस कम्पनीको बोलपत्र स्वीकृत नभएको हुनाले, बोलपत्र पेस गर्दा हामीले त्यस कार्यालयको ${data.Bank_Name || '[bank name]'} बैंकको धरौटी खातामा मिति ${data.Deposit_Date || '[रकम जम्मा गरेको मिति / Deposit Date]'} मा जम्मा गरेको रु. ${data.Amount || '[रकम अङ्कमा / Amount in numbers]'} (अक्षरेपी ${data.Amount_In_Words || '[रकम अक्षरमा / Amount in words]'}) धरौटी रकम यस कम्पनीको बैंक खातामा फिर्ता गरिदिनुहुन अनुरोध गर्दछु।
+
+संलग्न कागजातहरू:
+१. धरौटी जम्मा गरेको बैंक भौचरको सक्कल प्रति ।
+२. बोलपत्र खरिद गरेको रसिदको प्रतिलिपि।
+
+    `,
+    },
+    {
+        id: 'plan-agreement-request',
+        title: 'योजना सम्झौता गरी पाउ',
+        subject: 'योजना सम्झौता गरी पाउ ।',
+        fields: [
+            { id: 'Date', label: 'मिति', type: 'text' },
+            {
+                id: 'Addressee_Title',
+                label: 'सम्बोधन (Addressee Title)',
+                type: 'select',
+                options: [
+                    'श्रीमान् कार्यालय प्रमुख ज्यू,',
+                    'श्रीमान् प्रमुख प्रशासकीय अधिकृत ज्यू,',
+                    'श्रीमान् वडा अध्यक्ष ज्यू,',
+                    'श्रीमान् नगर प्रमुख ज्यू,',
+                    'श्रीमान् गाउँपालिका अध्यक्ष ज्यू,',
+                    'श्रीमान् आयोजना प्रमुख ज्यू,',
+                ],
+            },
+            { id: 'Office_Name', label: 'कार्यालयको नाम', type: 'text' },
+            { id: 'Office_Address', label: 'कार्यालयको ठेगाना', type: 'text' },
+            { id: 'Fiscal_Year', label: 'आर्थिक वर्ष', type: 'text', placeholder: '२०८१/८२' },
+            { id: 'Work_Name', label: 'कार्य/योजनाको नाम', type: 'text', placeholder: 'what work' },
+            { id: 'Work_Place', label: 'कार्य स्थान', type: 'text', placeholder: 'place' },
+            { id: 'Tender_No', label: 'ठेक्का नं.', type: 'text' },
+            { id: 'Your_Name', label: 'निवेदकको नाम', type: 'text' },
+            { id: 'Your_Company_Name', label: 'फर्मको नाम', type: 'text' },
+            { id: 'Company_Address', label: 'फर्मको ठेगाना', type: 'text' },
+        ],
+        content: (data) => `
+महोदय,
+
+उपरोक्त सम्बन्धमा यस आ.व. ${data.Fiscal_Year || '[ ]'} को योजना ${data.Work_Name || '[ what work ]'}, ${data.Work_Place || '[ place ]'} ठेक्का न :${data.Tender_No || '[  ]'} को योजना  सम्झौता गरिदिनुहुन अनुरोध गर्दछौ ।
+    `,
     },
     {
         id: 'cement-bench-quotation',
@@ -357,5 +456,7 @@ ${dynamicPricingSentences}
         }
     }
 ];
+
+export const TEMPLATES = [...NORMAL_TEMPLATES, ...BIDDING_TEMPLATES];
 
 export default TEMPLATES;
