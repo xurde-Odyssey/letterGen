@@ -82,6 +82,26 @@ const Sidebar = ({
         });
     }, [templates, templateSearch]);
 
+    const groupedTemplates = useMemo(() => {
+        const groups = {
+            normal: {
+                title: 'Normal letter',
+                templates: [],
+            },
+            bidding: {
+                title: 'Bidding section',
+                templates: [],
+            },
+        };
+
+        filteredTemplates.forEach((template) => {
+            const key = template.group === 'bidding' ? 'bidding' : 'normal';
+            groups[key].templates.push(template);
+        });
+
+        return [groups.normal, groups.bidding].filter((group) => group.templates.length > 0);
+    }, [filteredTemplates]);
+
     const clearCompanyFormMessages = () => {
         setCompanyFormError('');
         setCompanyFormSuccess('');
@@ -299,27 +319,34 @@ const Sidebar = ({
                             className="w-full p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none text-sm bg-white"
                         />
                     </div>
-                    {filteredTemplates.map((template) => (
-                        <button
-                            key={template.id}
-                            onClick={() => handleTemplateSelect(template.id)}
-                            className={cn(
-                                'w-full text-left p-4 rounded-xl transition-all duration-200 flex items-center justify-between group',
-                                activeTemplateId === template.id
-                                    ? 'bg-brand-50 text-brand-700 border border-brand-200 shadow-sm'
-                                    : 'hover:bg-slate-50 text-slate-600 border border-transparent'
-                            )}
-                        >
-                            <span className="font-medium text-sm leading-tight">{template.title}</span>
-                            <ChevronRight
-                                className={cn(
-                                    'w-4 h-4 transition-transform duration-200',
-                                    activeTemplateId === template.id
-                                        ? 'translate-x-0 opacity-100'
-                                        : '-translate-x-2 opacity-0 group-hover:translate-x-0 group-hover:opacity-100'
-                                )}
-                            />
-                        </button>
+                    {groupedTemplates.map((group) => (
+                        <div key={group.title} className="space-y-2">
+                            <p className="px-1 pt-2 text-[11px] uppercase tracking-wide font-semibold text-slate-500">
+                                {group.title}
+                            </p>
+                            {group.templates.map((template) => (
+                                <button
+                                    key={template.id}
+                                    onClick={() => handleTemplateSelect(template.id)}
+                                    className={cn(
+                                        'w-full text-left p-4 rounded-xl transition-all duration-200 flex items-center justify-between group',
+                                        activeTemplateId === template.id
+                                            ? 'bg-brand-50 text-brand-700 border border-brand-200 shadow-sm'
+                                            : 'hover:bg-slate-50 text-slate-600 border border-transparent'
+                                    )}
+                                >
+                                    <span className="font-medium text-sm leading-tight">{template.title}</span>
+                                    <ChevronRight
+                                        className={cn(
+                                            'w-4 h-4 transition-transform duration-200',
+                                            activeTemplateId === template.id
+                                                ? 'translate-x-0 opacity-100'
+                                                : '-translate-x-2 opacity-0 group-hover:translate-x-0 group-hover:opacity-100'
+                                        )}
+                                    />
+                                </button>
+                            ))}
+                        </div>
                     ))}
                     {filteredTemplates.length === 0 && (
                         <p className="text-xs text-slate-500 px-1 py-2">No letters found.</p>

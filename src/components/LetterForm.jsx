@@ -25,7 +25,16 @@ const LetterForm = ({
     if (!template) return null;
 
     const handleCopy = () => {
-        const text = template.content(data);
+        const pageOne = template.content(data);
+        const pageTwo = typeof template.secondPageContent === 'function' ? template.secondPageContent(data) : '';
+        const pageThree = typeof template.thirdPageContent === 'function' ? template.thirdPageContent(data) : '';
+        const text = [pageOne, pageTwo, pageThree]
+            .filter(Boolean)
+            .join('\n\n')
+            .replace(/\[\[B\]\]([\s\S]*?)\[\[\/B\]\]/g, '$1')
+            .replace(/\[\[LETTER_TITLE\]\]/g, 'Letter of Bid')
+            .replace(/\[\[SELF_DECLARATION_TITLE\]\]/g, 'Self Declaration')
+            .replace(/\[\[SIGNATURE\]\]/g, '');
         navigator.clipboard.writeText(text);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
@@ -51,7 +60,29 @@ const LetterForm = ({
         onChange('Signature_Stamp_Image', '');
     };
 
+    const handleStampUpload = (event) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+        if (!file.type.startsWith('image/')) {
+            window.alert('Please upload an image file.');
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = () => {
+            onChange('Stamp_Image', reader.result);
+        };
+        reader.readAsDataURL(file);
+        event.target.value = '';
+    };
+
+    const removeStampImage = () => {
+        onChange('Stamp_Image', '');
+    };
+
     const isValidPan = (value) => /^\d{9}$/.test(String(value || '').trim());
+    const showNepaliDateQuickFill = template.enableNepaliDateQuickFill !== false && template.group !== 'bidding';
+    const isBiddingTemplate = template.group === 'bidding';
 
     return (
         <div className="w-96 bg-white border-r h-screen flex flex-col no-print shrink-0 overflow-hidden shadow-inner">
@@ -149,7 +180,7 @@ const LetterForm = ({
                                 <label className="text-sm font-semibold text-slate-700 block transition-colors group-focus-within:text-brand-600">
                                     {field.label}
                                 </label>
-                                {field.id === 'Date' && (
+                                {field.id === 'Date' && showNepaliDateQuickFill && (
                                     <button
                                         type="button"
                                         onClick={() => onChange('Date', getCurrentNepaliDate())}
@@ -272,38 +303,40 @@ const LetterForm = ({
 
                 <div className="space-y-2">
                     <label className="text-sm font-semibold text-slate-700 block">
-                        हस्ताक्षर/स्टाम्प फोटो
+                        {isBiddingTemplate ? 'Signature (for Signed:)' : 'हस्ताक्षर/स्टाम्प फोटो'}
                     </label>
 
-                    <div className="space-y-2">
-                        <label className="text-xs font-semibold text-slate-600 block">
-                            हस्ताक्षर खण्डको स्थान
-                        </label>
-                        <div className="grid grid-cols-3 gap-2">
-                            {[
-                                { id: 'right', label: 'Right' },
-                                { id: 'up-right', label: 'Up Right' },
-                                { id: 'down-right', label: 'Down Right' },
-                                { id: 'left', label: 'Left' },
-                                { id: 'up-left', label: 'Up Left' },
-                                { id: 'down-left', label: 'Down Left' },
-                            ].map((placement) => (
-                                <button
-                                    key={placement.id}
-                                    type="button"
-                                    onClick={() => onChange('Signature_Block_Placement', placement.id)}
-                                    className={cn(
-                                        'px-2 py-1.5 rounded border text-xs font-semibold transition-colors',
-                                        (data.Signature_Block_Placement || 'right') === placement.id
-                                            ? 'border-brand-300 bg-brand-50 text-brand-700'
-                                            : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-                                    )}
-                                >
-                                    {placement.label}
-                                </button>
-                            ))}
+                    {!isBiddingTemplate && (
+                        <div className="space-y-2">
+                            <label className="text-xs font-semibold text-slate-600 block">
+                                हस्ताक्षर खण्डको स्थान
+                            </label>
+                            <div className="grid grid-cols-3 gap-2">
+                                {[
+                                    { id: 'right', label: 'Right' },
+                                    { id: 'up-right', label: 'Up Right' },
+                                    { id: 'down-right', label: 'Down Right' },
+                                    { id: 'left', label: 'Left' },
+                                    { id: 'up-left', label: 'Up Left' },
+                                    { id: 'down-left', label: 'Down Left' },
+                                ].map((placement) => (
+                                    <button
+                                        key={placement.id}
+                                        type="button"
+                                        onClick={() => onChange('Signature_Block_Placement', placement.id)}
+                                        className={cn(
+                                            'px-2 py-1.5 rounded border text-xs font-semibold transition-colors',
+                                            (data.Signature_Block_Placement || 'right') === placement.id
+                                                ? 'border-brand-300 bg-brand-50 text-brand-700'
+                                                : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                                        )}
+                                    >
+                                        {placement.label}
+                                    </button>
+                                ))}
+                            </div>
                         </div>
-                    </div>
+                    )}
 
                     <div className="flex items-center gap-2">
                         <label className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 text-sm text-slate-700 hover:bg-slate-50 cursor-pointer transition-colors">
@@ -334,6 +367,45 @@ const LetterForm = ({
                             <img
                                 src={data.Signature_Stamp_Image}
                                 alt="Signature or stamp preview"
+                                className="h-20 w-auto object-contain"
+                            />
+                        </div>
+                    )}
+                </div>
+
+                <div className="space-y-2">
+                    <label className="text-sm font-semibold text-slate-700 block">
+                        {isBiddingTemplate ? 'Stamp (bottom of each page)' : 'स्टाम्प फोटो'}
+                    </label>
+                    <div className="flex items-center gap-2">
+                        <label className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 text-sm text-slate-700 hover:bg-slate-50 cursor-pointer transition-colors">
+                            <Upload className="w-4 h-4" />
+                            Upload Stamp
+                            <input
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={handleStampUpload}
+                            />
+                        </label>
+
+                        {data.Stamp_Image && (
+                            <button
+                                type="button"
+                                onClick={removeStampImage}
+                                className="inline-flex items-center gap-1 px-3 py-2 rounded-lg border border-red-200 text-red-600 text-sm hover:bg-red-50 transition-colors"
+                            >
+                                <X className="w-4 h-4" />
+                                Remove
+                            </button>
+                        )}
+                    </div>
+
+                    {data.Stamp_Image && (
+                        <div className="border border-slate-200 rounded-lg p-2 bg-slate-50">
+                            <img
+                                src={data.Stamp_Image}
+                                alt="Stamp preview"
                                 className="h-20 w-auto object-contain"
                             />
                         </div>
