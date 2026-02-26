@@ -580,31 +580,34 @@ function App() {
         .order('created_at', { ascending: true });
 
       let resolvedProfiles = [];
+      const cloudMappedProfiles = !profilesReadError && Array.isArray(cloudProfiles)
+        ? cloudProfiles.map(fromCompanyProfileRow)
+        : [];
+      const localNormalizedProfiles = Array.isArray(sourceProfiles)
+        ? sourceProfiles.map((profile) => ({
+            ...profile,
+            id: isUuid(profile.id) ? profile.id : generateUuid(),
+          }))
+        : [];
 
-      if (!profilesReadError && Array.isArray(cloudProfiles) && cloudProfiles.length > 0) {
-        resolvedProfiles = cloudProfiles.map(fromCompanyProfileRow);
-      } else if (Array.isArray(sourceProfiles) && sourceProfiles.length > 0) {
-        const migrationRows = sourceProfiles.map((profile) =>
-          toCompanyProfileRow(
-            {
-              ...profile,
-              id: isUuid(profile.id) ? profile.id : generateUuid(),
-            },
-            currentUserId
-          )
-        );
-        const { error: migrationError } = await supabase
+      const mergedById = new Map();
+      cloudMappedProfiles.forEach((profile) => {
+        mergedById.set(profile.id, profile);
+      });
+      localNormalizedProfiles.forEach((profile) => {
+        mergedById.set(profile.id, {
+          ...(mergedById.get(profile.id) || {}),
+          ...profile,
+        });
+      });
+
+      resolvedProfiles = Array.from(mergedById.values());
+
+      if (resolvedProfiles.length > 0) {
+        const mergedRows = resolvedProfiles.map((profile) => toCompanyProfileRow(profile, currentUserId));
+        await supabase
           .from(SUPABASE_COMPANY_PROFILES_TABLE)
-          .upsert(migrationRows, { onConflict: 'id' });
-
-        if (!migrationError) {
-          const { data: migratedProfiles } = await supabase
-            .from(SUPABASE_COMPANY_PROFILES_TABLE)
-            .select('id,company_name,applicant_name,company_address,pan_no,letterpad_image_base64,signature_stamp_image_base64,created_at')
-            .eq('user_id', currentUserId)
-            .order('created_at', { ascending: true });
-          resolvedProfiles = Array.isArray(migratedProfiles) ? migratedProfiles.map(fromCompanyProfileRow) : [];
-        }
+          .upsert(mergedRows, { onConflict: 'id' });
       }
 
       if (resolvedProfiles.length > 0) {
