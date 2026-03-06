@@ -4,7 +4,7 @@ import Sidebar from './components/Sidebar';
 import LetterForm from './components/LetterForm';
 import LetterPreview from './components/LetterPreview';
 import { TEMPLATES } from './data/templates';
-import { supabase } from './lib/supabaseClient';
+import { supabase, supabaseConfigError } from './lib/supabaseClient';
 
 const DRAFT_STORAGE_KEY = 'letter-generator:draft:v1';
 const LETTERPAD_STORAGE_KEY = 'letter-generator:letterpad:v1';
@@ -91,7 +91,7 @@ function App() {
   const savedMeta = loadLocalStateMeta();
   const savedLetterpadImage = localStorage.getItem(LETTERPAD_STORAGE_KEY) || '';
 
-  const [authLoading, setAuthLoading] = useState(true);
+  const [authLoading, setAuthLoading] = useState(!supabaseConfigError);
   const [authSession, setAuthSession] = useState(null);
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
@@ -131,6 +131,7 @@ function App() {
   });
 
   const handleLogout = async () => {
+    if (!supabase) return;
     clearTimeout(inactivityTimerRef.current);
     inactivityTimerRef.current = null;
     await supabase.auth.signOut();
@@ -140,6 +141,12 @@ function App() {
 
   useEffect(() => {
     let isMounted = true;
+    if (!supabase) {
+      setAuthLoading(false);
+      return () => {
+        isMounted = false;
+      };
+    }
 
     const bootstrapAuth = async () => {
       const { data } = await supabase.auth.getSession();
@@ -471,7 +478,7 @@ function App() {
   }, [isCloudStateReady, activeTemplateId, formData, companyProfiles, selectedCompanyProfileId, defaultCompanyProfileId, letterpadImage]);
 
   useEffect(() => {
-    if (!currentUserId) return;
+    if (!supabase || !currentUserId) return;
 
     const syncInitialState = async () => {
       setSaveStatus('saving');
@@ -626,7 +633,7 @@ function App() {
   }, [currentUserId]);
 
   useEffect(() => {
-    if (!currentUserId || !isCloudStateReady) return;
+    if (!supabase || !currentUserId || !isCloudStateReady) return;
 
     const payload = {
       activeTemplateId,
@@ -664,7 +671,7 @@ function App() {
   ]);
 
   useEffect(() => {
-    if (!currentUserId || !isCompanyProfilesSyncReady) return;
+    if (!supabase || !currentUserId || !isCompanyProfilesSyncReady) return;
 
     const syncCompanyProfiles = async () => {
       const previousProfiles = previousCompanyProfilesRef.current || [];
@@ -712,6 +719,10 @@ function App() {
   const handleLogin = async (event) => {
     event.preventDefault();
     setLoginError('');
+    if (!supabase) {
+      setLoginError('Supabase is not configured. Please contact admin.');
+      return;
+    }
 
     const { error } = await supabase.auth.signInWithPassword({
       email: loginEmail.trim(),
@@ -728,6 +739,9 @@ function App() {
   };
 
   const handleChangePassword = async ({ currentPassword, newPassword }) => {
+    if (!supabase) {
+      return { success: false, error: 'Supabase is not configured.' };
+    }
     const email = authSession?.user?.email;
     if (!email) {
       return { success: false, error: 'Could not determine account email. Please log in again.' };
@@ -752,6 +766,20 @@ function App() {
 
     return { success: true, error: '' };
   };
+
+  if (supabaseConfigError) {
+    return (
+      <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
+        <div className="w-full max-w-xl bg-white rounded-2xl border border-slate-200 shadow-xl p-8 space-y-3">
+          <h1 className="text-2xl font-bold text-slate-800">Supabase Configuration Missing</h1>
+          <p className="text-sm text-slate-600">
+            Set <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code> in your environment
+            variables, then redeploy.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   if (authLoading) {
     return (
