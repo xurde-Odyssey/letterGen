@@ -85,8 +85,8 @@ const LetterForm = ({
     const isBiddingTemplate = template.group === 'bidding';
 
     return (
-        <div className="w-96 bg-white border-r h-screen flex flex-col no-print shrink-0 overflow-hidden shadow-inner">
-            <div className="p-6 border-b flex flex-col gap-4 bg-slate-50">
+        <div className="w-96 bg-white border-r border-slate-200 h-screen flex flex-col no-print shrink-0 overflow-hidden shadow-inner">
+            <div className="sticky top-0 z-20 p-6 border-b border-slate-200 flex flex-col gap-4 bg-slate-50/95 backdrop-blur">
                 <div className="flex justify-between items-center">
                     <h2 className="text-lg font-bold text-slate-800">Fill Details</h2>
                     <span className="text-xs font-semibold text-slate-500">

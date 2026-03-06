@@ -847,7 +847,7 @@ function App() {
   }
 
   return (
-    <div className="flex bg-slate-100 min-h-screen overflow-hidden font-sans">
+    <div className="bg-slate-100 min-h-screen overflow-hidden font-sans">
       <Sidebar
         templates={TEMPLATES}
         activeTemplateId={activeTemplateId}
@@ -869,26 +869,34 @@ function App() {
         onDismissLetterpadError={() => setLetterpadError('')}
       />
 
-      <div className="flex flex-1 overflow-hidden">
-        <LetterForm
-          template={activeTemplate}
-          data={formData}
-          onChange={handleFieldChange}
-          onClear={clearForm}
-          companyProfiles={companyProfiles}
-          selectedCompanyProfileId={selectedCompanyProfileId}
-          onSelectCompanyProfile={handleCompanyProfileSelect}
-          saveStatus={saveStatus}
-          onUndo={handleUndo}
-          onRedo={handleRedo}
-          canUndo={formHistoryPast.length > 0}
-          canRedo={formHistoryFuture.length > 0}
-          onCopyPreviousData={handleCopyPreviousLetterData}
-          canCopyPreviousData={Boolean(previousTemplateId && templateDrafts[previousTemplateId])}
-        />
+      <div className="md:pl-72">
+        <div className="flex min-h-screen overflow-hidden">
+          <LetterForm
+            template={activeTemplate}
+            data={formData}
+            onChange={handleFieldChange}
+            onClear={clearForm}
+            companyProfiles={companyProfiles}
+            selectedCompanyProfileId={selectedCompanyProfileId}
+            onSelectCompanyProfile={handleCompanyProfileSelect}
+            saveStatus={saveStatus}
+            onUndo={handleUndo}
+            onRedo={handleRedo}
+            canUndo={formHistoryPast.length > 0}
+            canRedo={formHistoryFuture.length > 0}
+            onCopyPreviousData={handleCopyPreviousLetterData}
+            canCopyPreviousData={Boolean(previousTemplateId && templateDrafts[previousTemplateId])}
+          />
 
-        <div className="flex-1 flex overflow-hidden">
-          <LetterPreview ref={printRef} template={activeTemplate} data={formData} letterpadImage={letterpadImage} />
+          <div className="flex-1 min-w-0 border-l border-slate-200 bg-slate-50 flex flex-col">
+            <div className="sticky top-0 z-10 no-print px-6 py-4 border-b border-slate-200 bg-white/95 backdrop-blur">
+              <p className="text-xs uppercase tracking-wide font-semibold text-slate-500">Preview</p>
+              <h2 className="text-base font-semibold text-slate-800">{activeTemplate?.title || 'Letter Preview'}</h2>
+            </div>
+            <div className="flex-1 min-h-0 overflow-hidden">
+              <LetterPreview ref={printRef} template={activeTemplate} data={formData} letterpadImage={letterpadImage} />
+            </div>
+          </div>
         </div>
       </div>
     </div>

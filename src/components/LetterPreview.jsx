@@ -72,7 +72,7 @@ const LetterPreview = React.forwardRef(({ template, data, letterpadImage }, ref)
     const bidContentLineHeight = isBiddingTemplate ? '1' : undefined;
 
     return (
-        <div className="flex-1 bg-slate-200 p-4 md:p-8 overflow-y-auto h-screen print:h-auto print:bg-white print:p-0">
+        <div className="flex-1 bg-slate-200 p-4 md:p-8 overflow-y-auto h-full min-h-0 print:h-auto print:bg-white print:p-0">
             <div
                 ref={ref}
                 className="space-y-6 print:space-y-0"

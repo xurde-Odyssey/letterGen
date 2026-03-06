@@ -274,9 +274,9 @@ const Sidebar = ({
 
             <div
                 className={cn(
-                    'fixed inset-y-0 left-0 z-40 w-80 bg-white border-r flex flex-col no-print shrink-0 overflow-y-auto transition-transform duration-300',
+                    'fixed inset-y-0 left-0 z-40 w-72 bg-white border-r flex flex-col no-print shrink-0 overflow-y-auto transition-transform duration-300',
                     isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full',
-                    'md:static md:h-screen md:translate-x-0 md:z-auto'
+                    'md:translate-x-0 md:z-40'
                 )}
             >
                 <div className="p-6 border-b bg-brand-900 text-white space-y-3">
