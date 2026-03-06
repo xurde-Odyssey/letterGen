@@ -89,7 +89,12 @@ function App() {
   const savedDraft = loadSavedDraft();
   const initialCompanyProfiles = loadCompanyProfiles();
   const savedMeta = loadLocalStateMeta();
-  const savedLetterpadImage = localStorage.getItem(LETTERPAD_STORAGE_KEY) || '';
+  let savedLetterpadImage = '';
+  try {
+    savedLetterpadImage = localStorage.getItem(LETTERPAD_STORAGE_KEY) || '';
+  } catch {
+    savedLetterpadImage = '';
+  }
 
   const [authLoading, setAuthLoading] = useState(!supabaseConfigError);
   const [authSession, setAuthSession] = useState(null);
@@ -149,10 +154,17 @@ function App() {
     }
 
     const bootstrapAuth = async () => {
-      const { data } = await supabase.auth.getSession();
-      if (!isMounted) return;
-      setAuthSession(data.session || null);
-      setAuthLoading(false);
+      try {
+        const { data } = await supabase.auth.getSession();
+        if (!isMounted) return;
+        setAuthSession(data.session || null);
+      } catch {
+        if (!isMounted) return;
+        setAuthSession(null);
+      } finally {
+        if (!isMounted) return;
+        setAuthLoading(false);
+      }
     };
 
     bootstrapAuth();
