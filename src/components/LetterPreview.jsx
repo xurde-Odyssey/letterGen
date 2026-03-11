@@ -30,11 +30,10 @@ const LetterPreview = React.forwardRef(({ template, data, letterpadImage }, ref)
             : fallback
     );
     const renderTemplatedContent = (content) => {
-        if (!isBiddingTemplate) return content;
-
         const parts = String(content).split(/(\[\[B\]\][\s\S]*?\[\[\/B\]\]|\[\[SIGNATURE\]\]|\[\[LETTER_TITLE\]\]|\[\[SELF_DECLARATION_TITLE\]\])/g);
         return parts.map((part, index) => {
             if (part === '[[LETTER_TITLE]]') {
+                if (!isBiddingTemplate) return null;
                 return (
                     <div key={index} className="text-center font-bold underline my-2">
                         Letter of Bid
@@ -42,6 +41,7 @@ const LetterPreview = React.forwardRef(({ template, data, letterpadImage }, ref)
                 );
             }
             if (part === '[[SELF_DECLARATION_TITLE]]') {
+                if (!isBiddingTemplate) return null;
                 return (
                     <div key={index} className="text-center font-bold underline my-2">
                         Self Declaration
@@ -49,6 +49,7 @@ const LetterPreview = React.forwardRef(({ template, data, letterpadImage }, ref)
                 );
             }
             if (part === '[[SIGNATURE]]') {
+                if (!isBiddingTemplate) return null;
                 return (
                     <React.Fragment key={index}>
                         {data.Signature_Stamp_Image ? (

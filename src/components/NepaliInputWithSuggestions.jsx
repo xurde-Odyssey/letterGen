@@ -15,6 +15,7 @@ const NepaliInputWithSuggestions = ({
   className = '',
   isNepaliMode = false,
   enableUnicodeHelper = false,
+  inputProps = {},
 }) => {
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -159,6 +160,7 @@ const NepaliInputWithSuggestions = ({
   return (
     <div className="relative">
       <InputComponent
+        {...inputProps}
         ref={inputRef}
         type="text"
         value={value}

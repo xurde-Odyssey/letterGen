@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nepali Inline Typing Utility Example</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 24px;
+    }
+
+    input,
+    textarea {
+      width: 320px;
+      padding: 10px;
+      font-size: 16px;
+      box-sizing: border-box;
+    }
+  </style>
+</head>
+<body>
+  <input id="recipient" data-nepali="true" name="recipientName">
+
+  <script src="./branch.js"></script>
+  <script src="./converter.js"></script>
+  <script src="./nepali-inline.js"></script>
+  <script>
+    smartConverter(true);
+
+    function transliterateWord(word) {
+      return translateWords(word, false).replace(/\s+$/, "");
+    }
+
+    NepaliInlineTyping.bind("[data-nepali='true']", {
+      transliterateWord: transliterateWord,
+    });
+  </script>
+</body>
+</html>

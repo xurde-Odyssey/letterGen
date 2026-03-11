@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
     FileText,
     Printer,
@@ -16,6 +16,9 @@ import {
     Building2,
 } from 'lucide-react';
 import { cn } from '../utils/cn';
+import { smartConverter, translateWords } from '../letter-app-js-utility/branch';
+import '../letter-app-js-utility/converter';
+import '../letter-app-js-utility/nepali-inline';
 
 const EMPTY_COMPANY_FORM = {
     companyName: '',
@@ -28,6 +31,21 @@ const EMPTY_COMPANY_FORM = {
 
 const normalizeDigitsToAscii = (value) =>
     String(value || '').replace(/[०-९]/g, (digit) => String(digit.charCodeAt(0) - 2406));
+
+smartConverter(true);
+
+const transliterateWord = (word) => String(translateWords(word, false) || word).replace(/\s+$/, '');
+
+const getInlineFieldProps = (fieldKey) => ({
+    'data-nepali-inline': 'true',
+    'data-inline-field-key': fieldKey,
+});
+const MOSTLY_USED_TEMPLATE_IDS = new Set([
+    'vendor-registration',
+    'payment-request',
+    'cement-bench-quotation',
+    'market-price-quotation',
+]);
 
 const Sidebar = ({
     templates,
@@ -47,6 +65,7 @@ const Sidebar = ({
     onLogout,
     onChangePassword,
     letterpadError,
+    companyProfilesError,
     onDismissLetterpadError,
 }) => {
     const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
@@ -66,6 +85,32 @@ const Sidebar = ({
     const [passwordError, setPasswordError] = useState('');
     const [passwordSuccess, setPasswordSuccess] = useState('');
     const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
+    const companyFormRef = useRef(null);
+
+    useEffect(() => {
+        const inlineTyping = globalThis.NepaliInlineTyping;
+        if (!isCompanyModalOpen || !inlineTyping || !companyFormRef.current) {
+            return undefined;
+        }
+
+        const bindings = inlineTyping.bind(
+            companyFormRef.current.querySelectorAll('[data-nepali-inline="true"]'),
+            {
+                transliterateWord,
+                triggerCharacters: [' '],
+                onConverted: ({ element, value }) => {
+                    const fieldKey = element.dataset.inlineFieldKey;
+                    if (!fieldKey) return;
+                    clearCompanyFormMessages();
+                    setCompanyForm((prev) => ({ ...prev, [fieldKey]: value }));
+                },
+            }
+        );
+
+        return () => {
+            bindings.forEach((binding) => binding?.destroy?.());
+        };
+    }, [isCompanyModalOpen]);
 
     const editingCompany = useMemo(
         () => companyProfiles.find((profile) => profile.id === editingCompanyId) || null,
@@ -84,6 +129,10 @@ const Sidebar = ({
 
     const groupedTemplates = useMemo(() => {
         const groups = {
+            mostlyUsed: {
+                title: 'Mostly used',
+                templates: [],
+            },
             normal: {
                 title: 'Normal letter',
                 templates: [],
@@ -95,11 +144,16 @@ const Sidebar = ({
         };
 
         filteredTemplates.forEach((template) => {
+            if (MOSTLY_USED_TEMPLATE_IDS.has(template.id)) {
+                groups.mostlyUsed.templates.push(template);
+                return;
+            }
+
             const key = template.group === 'bidding' ? 'bidding' : 'normal';
             groups[key].templates.push(template);
         });
 
-        return [groups.normal, groups.bidding].filter((group) => group.templates.length > 0);
+        return [groups.mostlyUsed, groups.normal, groups.bidding].filter((group) => group.templates.length > 0);
     }, [filteredTemplates]);
 
     const clearCompanyFormMessages = () => {
@@ -307,6 +361,11 @@ const Sidebar = ({
                         <Settings className="w-4 h-4" />
                         Manage Companies
                     </button>
+                    {companyProfilesError && (
+                        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                            {companyProfilesError}
+                        </div>
+                    )}
                 </div>
 
                 <nav className="flex-1 p-4 space-y-2">
@@ -321,7 +380,7 @@ const Sidebar = ({
                     </div>
                     {groupedTemplates.map((group) => (
                         <div key={group.title} className="space-y-2">
-                            <p className="px-1 pt-2 text-[11px] uppercase tracking-wide font-semibold text-slate-500">
+                            <p className="px-1 pt-2 text-[11px] uppercase tracking-wide font-bold text-slate-700">
                                 {group.title}
                             </p>
                             {group.templates.map((template) => (
@@ -503,7 +562,7 @@ const Sidebar = ({
                             </div>
 
                             <div className="p-4 overflow-y-auto space-y-4 bg-slate-50/60">
-                                <section className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
+                                <section ref={companyFormRef} className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
                                     <div className="flex items-center gap-2 text-slate-800">
                                         <Building2 className="w-4 h-4" />
                                         <p className="text-sm font-semibold">
@@ -528,6 +587,7 @@ const Sidebar = ({
                                             setCompanyForm((prev) => ({ ...prev, companyName: e.target.value }));
                                         }}
                                         placeholder="Company Name"
+                                        {...getInlineFieldProps('companyName')}
                                         className="w-full p-2.5 border border-slate-200 rounded-lg text-sm"
                                     />
                                     <input
@@ -538,6 +598,7 @@ const Sidebar = ({
                                             setCompanyForm((prev) => ({ ...prev, applicantName: e.target.value }));
                                         }}
                                         placeholder="Applicant Name"
+                                        {...getInlineFieldProps('applicantName')}
                                         className="w-full p-2.5 border border-slate-200 rounded-lg text-sm"
                                     />
                                     <input
@@ -548,6 +609,7 @@ const Sidebar = ({
                                             setCompanyForm((prev) => ({ ...prev, companyAddress: e.target.value }));
                                         }}
                                         placeholder="Company Address"
+                                        {...getInlineFieldProps('companyAddress')}
                                         className="w-full p-2.5 border border-slate-200 rounded-lg text-sm"
                                     />
                                     <input
