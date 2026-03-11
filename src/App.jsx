@@ -14,6 +14,11 @@ const SUPABASE_APP_STATE_TABLE = 'app_state';
 const SUPABASE_COMPANY_PROFILES_TABLE = 'company_profiles';
 const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000;
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const PREVIEW_ZOOM_OPTIONS = [
+  { label: '90%', value: 0.9 },
+  { label: '100%', value: 1 },
+  { label: '110%', value: 1.1 },
+];
 
 const loadSavedDraft = () => {
   try {
@@ -126,6 +131,7 @@ function App() {
   const [letterpadImage, setLetterpadImage] = useState(savedLetterpadImage);
   const [letterpadError, setLetterpadError] = useState('');
   const [saveStatus, setSaveStatus] = useState('saved');
+  const [previewZoom, setPreviewZoom] = useState(1);
   const [formHistoryPast, setFormHistoryPast] = useState([]);
   const [formHistoryFuture, setFormHistoryFuture] = useState([]);
   const [localUpdatedAt, setLocalUpdatedAt] = useState(
@@ -967,11 +973,34 @@ function App() {
 
           <div className="flex-1 min-w-0 border-l border-slate-200 bg-slate-50 flex flex-col">
             <div className="sticky top-0 z-10 no-print px-6 py-4 border-b border-slate-200 bg-white/95 backdrop-blur">
-              <p className="text-xs uppercase tracking-wide font-semibold text-slate-500">Preview</p>
-              <h2 className="text-base font-semibold text-slate-800">{activeTemplate?.title || 'Letter Preview'}</h2>
+              <div className="flex flex-wrap items-end justify-between gap-3">
+                <div>
+                  <p className="text-xs uppercase tracking-wide font-semibold text-slate-500">Preview</p>
+                  <h2 className="text-base font-semibold text-slate-800">{activeTemplate?.title || 'Letter Preview'}</h2>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Zoom</span>
+                  <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1">
+                    {PREVIEW_ZOOM_OPTIONS.map((option) => (
+                      <button
+                        key={option.label}
+                        type="button"
+                        onClick={() => setPreviewZoom(option.value)}
+                        className={
+                          previewZoom === option.value
+                            ? 'rounded-md bg-white px-2.5 py-1 text-xs font-bold text-brand-700 shadow-sm'
+                            : 'rounded-md px-2.5 py-1 text-xs font-semibold text-slate-500 hover:text-slate-700'
+                        }
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </div>
             <div className="flex-1 min-h-0 overflow-hidden">
-              <LetterPreview ref={printRef} template={activeTemplate} data={formData} letterpadImage={letterpadImage} />
+              <LetterPreview ref={printRef} template={activeTemplate} data={formData} letterpadImage={letterpadImage} zoom={previewZoom} />
             </div>
           </div>
         </div>

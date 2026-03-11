@@ -388,18 +388,20 @@ const Sidebar = ({
                                     key={template.id}
                                     onClick={() => handleTemplateSelect(template.id)}
                                     className={cn(
-                                        'w-full text-left p-4 rounded-xl transition-all duration-200 flex items-center justify-between group',
+                                        'w-full text-left p-4 rounded-xl transition-all duration-200 flex items-center justify-between group border-l-4',
                                         activeTemplateId === template.id
-                                            ? 'bg-brand-50 text-brand-700 border border-brand-200 shadow-sm'
-                                            : 'hover:bg-slate-50 text-slate-600 border border-transparent'
+                                            ? 'bg-brand-100 text-brand-800 border-y border-r border-brand-200 border-l-brand-600 shadow-md shadow-brand-100'
+                                            : 'hover:bg-slate-50 text-slate-600 border-y border-r border-transparent border-l-transparent'
                                     )}
                                 >
-                                    <span className="font-medium text-sm leading-tight">{template.title}</span>
+                                    <span className={cn('text-sm leading-tight', activeTemplateId === template.id ? 'font-bold' : 'font-medium')}>
+                                        {template.title}
+                                    </span>
                                     <ChevronRight
                                         className={cn(
                                             'w-4 h-4 transition-transform duration-200',
                                             activeTemplateId === template.id
-                                                ? 'translate-x-0 opacity-100'
+                                                ? 'translate-x-0 opacity-100 text-brand-700'
                                                 : '-translate-x-2 opacity-0 group-hover:translate-x-0 group-hover:opacity-100'
                                         )}
                                     />
