@@ -24,7 +24,7 @@ export const nepaliDictionary = {
   'ga': ['ग'],
   'pa': ['प'],
   'ba': ['ब'],
-  
+
   // Very common phrases
   'mero': ['मेरो'],
   'tero': ['तेरो'],

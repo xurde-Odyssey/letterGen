@@ -1,8 +1,119 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Trash2, Copy, Check, Upload, X, Undo2, Redo2 } from 'lucide-react';
 import { cn } from '../utils/cn';
 import NepaliInputWithSuggestions from './NepaliInputWithSuggestions';
 import { getCurrentNepaliDate } from 'nepali/dates';
+import { smartConverter, translateWords } from '../letter-app-js-utility/branch';
+import '../letter-app-js-utility/converter';
+import '../letter-app-js-utility/nepali-inline';
+
+const DEVANAGARI_REGEX = /[\u0900-\u097F]/;
+const LATIN_EXCLUSION_TOKENS = new Set([
+    'date',
+    'email',
+    'phone',
+    'mobile',
+    'contact',
+    'pan',
+    'vat',
+    'url',
+    'website',
+    'link',
+    'code',
+    'reference',
+    'ref',
+    'number',
+    'no',
+    'fiscal',
+    'year',
+    'month',
+    'day',
+    'days',
+    'qty',
+    'quantity',
+    'percent',
+    'percentage',
+    'price',
+    'amount',
+    'bid',
+    'tender',
+    'invitation',
+    'validity',
+    'deposit',
+    'notice',
+    'bank',
+    'account',
+    'contract',
+    'discount',
+    'mail',
+    'url',
+    'id',
+]);
+const NEPALI_EXCLUSION_PATTERNS = [
+    'मिति',
+    'फोन',
+    'इमेल',
+    'सम्पर्क',
+    'पान',
+    'भ्याट',
+    'सन्दर्भ',
+    'कोड',
+    'लिंक',
+    'वेबसाइट',
+    'पत्र नं',
+    'ठेक्का नं',
+    'नं.',
+    'नं',
+    'नम्बर',
+    'अंकमा',
+    'मूल्य',
+    'दिन',
+    'आर्थिक वर्ष',
+];
+const NEPALI_FIELD_FORCE_INCLUDE_IDS = new Set([
+    'Date',
+    'Notice_Date',
+    'Notice_Number',
+    'Fiscal_Year',
+    'Amount',
+    'Amount_In_Words',
+    'Extra_Days',
+    'Rate_Amount',
+]);
+
+smartConverter(true);
+
+const shouldEnableNepaliTyping = (field) => {
+    if (!field || !['text', 'textarea'].includes(field.type)) {
+        return false;
+    }
+
+    if (NEPALI_FIELD_FORCE_INCLUDE_IDS.has(field.id)) {
+        return true;
+    }
+
+    const searchableText = [field.id, field.label, field.placeholder]
+        .filter(Boolean)
+        .join(' ');
+    const latinTokens = searchableText.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+
+    if (latinTokens.some((token) => LATIN_EXCLUSION_TOKENS.has(token))) {
+        return false;
+    }
+
+    if (NEPALI_EXCLUSION_PATTERNS.some((pattern) => searchableText.includes(pattern))) {
+        return false;
+    }
+
+    return field.type === 'textarea' || DEVANAGARI_REGEX.test(searchableText);
+};
+
+const transliterateWord = (word) => String(translateWords(word, false) || word).replace(/\s+$/, '');
+
+const getInlineFieldProps = (fieldKey) => ({
+    'data-nepali-inline': 'true',
+    'data-inline-field-key': fieldKey,
+});
 
 const LetterForm = ({
     template,
@@ -13,6 +124,8 @@ const LetterForm = ({
     selectedCompanyProfileId,
     onSelectCompanyProfile,
     saveStatus,
+    onSyncCompanyProfiles,
+    companyProfilesSyncStatus,
     onUndo,
     onRedo,
     canUndo,
@@ -21,6 +134,46 @@ const LetterForm = ({
     canCopyPreviousData,
 }) => {
     const [copied, setCopied] = useState(false);
+    const formContainerRef = useRef(null);
+
+    useEffect(() => {
+        const inlineTyping = globalThis.NepaliInlineTyping;
+        if (!template || !inlineTyping || !formContainerRef.current) {
+            return undefined;
+        }
+
+        const bindings = inlineTyping.bind(
+            formContainerRef.current.querySelectorAll('[data-nepali-inline="true"]'),
+            {
+                transliterateWord,
+                triggerCharacters: [' '],
+                onConverted: ({ element, value }) => {
+                    const fieldKey = element.dataset.inlineFieldKey;
+                    if (!fieldKey) {
+                        return;
+                    }
+
+                    if (fieldKey.startsWith('product-list:')) {
+                        const [, parentFieldId, itemIndex, itemKey] = fieldKey.split(':');
+                        const list = Array.isArray(data[parentFieldId]) ? [...data[parentFieldId]] : [];
+                        const index = Number(itemIndex);
+                        if (!list[index]) {
+                            return;
+                        }
+                        list[index] = { ...list[index], [itemKey]: value };
+                        onChange(parentFieldId, list);
+                        return;
+                    }
+
+                    onChange(fieldKey, value);
+                },
+            }
+        );
+
+        return () => {
+            bindings.forEach((binding) => binding?.destroy?.());
+        };
+    }, [data, onChange, template]);
 
     if (!template) return null;
 
@@ -85,7 +238,7 @@ const LetterForm = ({
     const isBiddingTemplate = template.group === 'bidding';
 
     return (
-        <div className="w-96 bg-white border-r border-slate-200 h-screen flex flex-col no-print shrink-0 overflow-hidden shadow-inner">
+        <div ref={formContainerRef} className="w-96 bg-white border-r border-slate-200 h-screen flex flex-col no-print shrink-0 overflow-hidden shadow-inner">
             <div className="sticky top-0 z-20 p-6 border-b border-slate-200 flex flex-col gap-4 bg-slate-50/95 backdrop-blur">
                 <div className="flex justify-between items-center">
                     <h2 className="text-lg font-bold text-slate-800">Fill Details</h2>
@@ -93,8 +246,21 @@ const LetterForm = ({
                         {saveStatus === 'saving' ? 'Saving...' : saveStatus === 'error' ? 'Save failed' : 'Saved'}
                     </span>
                 </div>
-                <div className="flex justify-between items-center">
-                    <div className="flex gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                    <button
+                        type="button"
+                        onClick={onSyncCompanyProfiles}
+                        disabled={!onSyncCompanyProfiles || companyProfilesSyncStatus === 'syncing'}
+                        className={cn(
+                            'px-2 py-1.5 rounded-lg text-xs font-semibold transition-colors border',
+                            companyProfilesSyncStatus === 'syncing'
+                                ? 'border-slate-200 text-slate-400 cursor-not-allowed'
+                                : 'border-brand-200 text-brand-700 hover:bg-brand-50'
+                        )}
+                    >
+                        {companyProfilesSyncStatus === 'syncing' ? 'Syncing...' : 'Sync Profiles'}
+                    </button>
+                    <div className="flex flex-wrap items-center gap-2">
                         <button
                             onClick={onUndo}
                             disabled={!canUndo}
@@ -213,7 +379,8 @@ const LetterForm = ({
                                         list={`suggestions-${field.id}`}
                                         value={fieldValue}
                                         onChange={(e) => onChange(field.id, e.target.value)}
-                                        placeholder={field.placeholder || `${field.label} प्रविष्ट गर्नुहोस्...`}
+                                        placeholder={field.placeholder || ''}
+                                        {...(shouldEnableNepaliTyping(field) ? getInlineFieldProps(field.id) : {})}
                                         className="w-full p-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none text-sm transition-all font-nepali bg-white"
                                     />
                                     <datalist id={`suggestions-${field.id}`}>
@@ -248,6 +415,7 @@ const LetterForm = ({
                                                     onChange(field.id, list);
                                                 }}
                                                 placeholder="Product_Name (e.g., सिमेन्ट बेन्च)"
+                                                {...getInlineFieldProps(`product-list:${field.id}:${index}:Product_Name`)}
                                                 className="w-full p-2 border border-slate-200 rounded text-sm font-nepali bg-white"
                                             />
                                             <input
@@ -259,6 +427,7 @@ const LetterForm = ({
                                                     onChange(field.id, list);
                                                 }}
                                                 placeholder="Price_Number (e.g., ५०००)"
+                                                {...getInlineFieldProps(`product-list:${field.id}:${index}:Price_Number`)}
                                                 className="w-full p-2 border border-slate-200 rounded text-sm font-nepali bg-white"
                                             />
                                             <input
@@ -270,6 +439,7 @@ const LetterForm = ({
                                                     onChange(field.id, list);
                                                 }}
                                                 placeholder="Price_Words (e.g., अक्षरमा: पाँच हजार मात्र)"
+                                                {...getInlineFieldProps(`product-list:${field.id}:${index}:Price_Words`)}
                                                 className="w-full p-2 border border-slate-200 rounded text-sm font-nepali bg-white"
                                             />
                                         </div>
@@ -289,9 +459,10 @@ const LetterForm = ({
                                 <NepaliInputWithSuggestions
                                     value={fieldValue}
                                     onChange={(newValue) => onChange(field.id, newValue)}
-                                    placeholder={field.placeholder || `${field.label} प्रविष्ट गर्नुहोस्...`}
+                                    placeholder={field.placeholder || ''}
                                     isTextarea={field.type === 'textarea'}
-                                    isNepaliMode={true}
+                                    isNepaliMode={false}
+                                    inputProps={shouldEnableNepaliTyping(field) ? getInlineFieldProps(field.id) : undefined}
                                 />
                             )}
                             {showPanError && (

@@ -369,16 +369,16 @@ ${introParagraph}
 
             const productNameList = validProducts.length > 0
                 ? validProducts
-                    .map((item) => item.Product_Name || '[Product_Name]')
+                    .map((item) => `[[B]]${item.Product_Name || '[Product_Name]'}[[/B]]`)
                     .join(', ')
-                : '[Product_Name, Product_Name]';
+                : '[[B]][Product_Name][/B]], [[B]][Product_Name][[/B]]';
 
             const dynamicPricingSentences = validProducts.length > 0
                 ? validProducts.map((item, index) => {
                     const suffix = index === validProducts.length - 1 ? 'रहेको जानकारी गराउँदछु।' : 'र';
-                    return `उक्त ${item.Product_Name || '[Product_Name]'} को डेलिभरी, भ्याट तथा फिटिङ्ग सहित बजार मूल्य रु ${item.Price_Number || '[Price_Number]'}/- (${item.Price_Words || '[Price_Words]'}) ${suffix}`;
+                    return `उक्त [[B]]${item.Product_Name || '[Product_Name]'}[[/B]] को डेलिभरी, भ्याट तथा फिटिङ्ग सहित बजार मूल्य रु ${item.Price_Number || '[Price_Number]'}/- (${item.Price_Words || '[Price_Words]'}) ${suffix}`;
                 }).join(' ')
-                : 'उक्त [Product_Name] को डेलिभरी, भ्याट तथा फिटिङ्ग सहित बजार मूल्य रु [Price_Number]/- ([Price_Words]) रहेको जानकारी गराउँदछु।';
+                : 'उक्त [[B]][Product_Name][[/B]] को डेलिभरी, भ्याट तथा फिटिङ्ग सहित बजार मूल्य रु [Price_Number]/- ([Price_Words]) रहेको जानकारी गराउँदछु।';
 
             if (variant === 'नमुना २') {
                 return `
@@ -432,7 +432,7 @@ ${dynamicPricingSentences}
             { id: 'Notice_Number', label: 'पत्र/सूचना नं.', type: 'text' },
             { id: 'Notice_Date', label: 'पत्रको मिति', type: 'text', placeholder: '२०८०/०१/०१' },
             { id: 'Product_Name', label: 'सामानको नाम', type: 'text' },
-            { id: 'Unit', label: 'इकाई', type: 'text', placeholder: 'के.जी., कि.ग्रा., टन, आदि' },
+            { id: 'Unit', label: 'इकाई', type: 'text', placeholder: 'के.जी., कि.ग्रा., टन, आदि', defaultValue: 'पिस' },
             { id: 'Rate_Amount', label: 'दर (रु.)', type: 'text' },
             { id: 'Your_Name', label: 'निवेदकको नाम', type: 'text' },
             { id: 'Your_Company_Name', label: 'कम्पनी/फर्मको नाम', type: 'text' },

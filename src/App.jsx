@@ -8,7 +8,7 @@ import { supabase, supabaseConfigError } from './lib/supabaseClient';
 
 const DRAFT_STORAGE_KEY = 'letter-generator:draft:v1';
 const LETTERPAD_STORAGE_KEY = 'letter-generator:letterpad:v1';
-const COMPANY_PROFILES_STORAGE_KEY = 'letter-generator:company-profiles:v1';
+const COMPANY_PROFILES_STORAGE_KEY_PREFIX = 'letter-generator:company-profiles:v2';
 const LOCAL_STATE_META_KEY = 'letter-generator:state-meta:v1';
 const SUPABASE_APP_STATE_TABLE = 'app_state';
 const SUPABASE_COMPANY_PROFILES_TABLE = 'company_profiles';
@@ -27,9 +27,12 @@ const loadSavedDraft = () => {
   }
 };
 
-const loadCompanyProfiles = () => {
+const getCompanyProfilesStorageKey = (userId) => `${COMPANY_PROFILES_STORAGE_KEY_PREFIX}:${userId}`;
+
+const loadCompanyProfiles = (userId) => {
+  if (!userId) return [];
   try {
-    const raw = localStorage.getItem(COMPANY_PROFILES_STORAGE_KEY);
+    const raw = localStorage.getItem(getCompanyProfilesStorageKey(userId));
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
@@ -37,6 +40,12 @@ const loadCompanyProfiles = () => {
   } catch {
     return [];
   }
+};
+
+const persistCompanyProfilesLocally = (userId, profiles) => {
+  if (!userId) return false;
+  localStorage.setItem(getCompanyProfilesStorageKey(userId), JSON.stringify(profiles));
+  return true;
 };
 
 const loadLocalStateMeta = () => {
@@ -87,7 +96,6 @@ const fromCompanyProfileRow = (row) => ({
 
 function App() {
   const savedDraft = loadSavedDraft();
-  const initialCompanyProfiles = loadCompanyProfiles();
   const savedMeta = loadLocalStateMeta();
   let savedLetterpadImage = '';
   try {
@@ -110,7 +118,9 @@ function App() {
   const [formData, setFormData] = useState(() => savedDraft?.formData || {});
   const [templateDrafts, setTemplateDrafts] = useState(() => savedDraft?.templateDrafts || {});
   const [previousTemplateId, setPreviousTemplateId] = useState(() => savedDraft?.previousTemplateId || '');
-  const [companyProfiles, setCompanyProfiles] = useState(initialCompanyProfiles);
+  const [companyProfiles, setCompanyProfiles] = useState([]);
+  const [companyProfilesError, setCompanyProfilesError] = useState('');
+  const [companyProfilesSyncStatus, setCompanyProfilesSyncStatus] = useState('idle');
   const [selectedCompanyProfileId, setSelectedCompanyProfileId] = useState(() => savedDraft?.selectedCompanyProfileId || '');
   const [defaultCompanyProfileId, setDefaultCompanyProfileId] = useState(() => savedDraft?.defaultCompanyProfileId || '');
   const [letterpadImage, setLetterpadImage] = useState(savedLetterpadImage);
@@ -134,6 +144,56 @@ function App() {
     contentRef: printRef,
     documentTitle: activeTemplate?.title || 'Letter',
   });
+
+  const persistLetterpadLocally = (nextLetterpad) => {
+    try {
+      if (nextLetterpad) {
+        localStorage.setItem(LETTERPAD_STORAGE_KEY, nextLetterpad);
+      } else {
+        localStorage.removeItem(LETTERPAD_STORAGE_KEY);
+      }
+      return true;
+    } catch {
+      setLetterpadError('Letterpad image could not be saved locally (storage limit).');
+      return false;
+    }
+  };
+
+  const refreshCompanyProfilesFromDatabase = async () => {
+    if (!supabase || !currentUserId) return;
+
+    setCompanyProfilesSyncStatus('syncing');
+    setCompanyProfilesError('');
+
+    const { data: cloudProfiles, error } = await supabase
+      .from(SUPABASE_COMPANY_PROFILES_TABLE)
+      .select('id,company_name,applicant_name,company_address,pan_no,letterpad_image_base64,signature_stamp_image_base64,created_at')
+      .eq('user_id', currentUserId)
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      setCompanyProfilesError(error.message || 'Failed to refresh company profiles from Supabase.');
+      setCompanyProfilesSyncStatus('error');
+      return;
+    }
+
+    const nextProfiles = Array.isArray(cloudProfiles) ? cloudProfiles.map(fromCompanyProfileRow) : [];
+    previousCompanyProfilesRef.current = nextProfiles;
+    setCompanyProfiles(nextProfiles);
+
+    try {
+      persistCompanyProfilesLocally(currentUserId, nextProfiles);
+    } catch {
+      setCompanyProfilesError('Company profiles refreshed from Supabase, but local cache update failed.');
+    }
+
+    const selectedExists = nextProfiles.some((profile) => profile.id === selectedCompanyProfileId);
+    const defaultExists = nextProfiles.some((profile) => profile.id === defaultCompanyProfileId);
+    if (!selectedExists) setSelectedCompanyProfileId('');
+    if (!defaultExists) setDefaultCompanyProfileId('');
+
+    setCompanyProfilesSyncStatus('synced');
+  };
 
   const handleLogout = async () => {
     if (!supabase) return;
@@ -173,6 +233,9 @@ function App() {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setAuthSession(session || null);
+      setCompanyProfiles([]);
+      setCompanyProfilesError('');
+      setCompanyProfilesSyncStatus('idle');
       setIsCloudStateReady(false);
       setIsCompanyProfilesSyncReady(false);
     });
@@ -299,11 +362,7 @@ function App() {
 
     const nextLetterpad = profile.letterpadImage || '';
     setLetterpadImage(nextLetterpad);
-    if (nextLetterpad) {
-      localStorage.setItem(LETTERPAD_STORAGE_KEY, nextLetterpad);
-    } else {
-      localStorage.removeItem(LETTERPAD_STORAGE_KEY);
-    }
+    persistLetterpadLocally(nextLetterpad);
   };
 
   const handleAddCompanyProfile = (profileInput) => {
@@ -361,7 +420,7 @@ function App() {
     if (selectedCompanyProfileId === profileId) {
       setSelectedCompanyProfileId('');
       setLetterpadImage('');
-      localStorage.removeItem(LETTERPAD_STORAGE_KEY);
+      persistLetterpadLocally('');
     }
     if (defaultCompanyProfileId === profileId) {
       setDefaultCompanyProfileId('');
@@ -381,11 +440,7 @@ function App() {
     reader.onload = () => {
       const imageData = typeof reader.result === 'string' ? reader.result : '';
       setLetterpadImage(imageData);
-      try {
-        localStorage.setItem(LETTERPAD_STORAGE_KEY, imageData);
-      } catch {
-        setLetterpadError('Letterpad image could not be saved locally (storage limit).');
-      }
+      persistLetterpadLocally(imageData);
     };
     reader.readAsDataURL(file);
     event.target.value = '';
@@ -394,7 +449,7 @@ function App() {
   const handleRemoveLetterpad = () => {
     setLetterpadImage('');
     setLetterpadError('');
-    localStorage.removeItem(LETTERPAD_STORAGE_KEY);
+    persistLetterpadLocally('');
   };
 
   const clearForm = () => {
@@ -427,12 +482,13 @@ function App() {
   }, [activeTemplateId, formData, templateDrafts, selectedCompanyProfileId, defaultCompanyProfileId, previousTemplateId]);
 
   useEffect(() => {
+    if (!currentUserId) return;
     try {
-      localStorage.setItem(COMPANY_PROFILES_STORAGE_KEY, JSON.stringify(companyProfiles));
+      persistCompanyProfilesLocally(currentUserId, companyProfiles);
     } catch {
-      // Ignore storage errors.
+      setCompanyProfilesError('Company profiles could not be cached locally on this device.');
     }
-  }, [companyProfiles]);
+  }, [currentUserId, companyProfiles]);
 
   useEffect(() => {
     if (!activeTemplateId) return;
@@ -462,11 +518,7 @@ function App() {
 
     const nextLetterpad = selectedProfile.letterpadImage || '';
     setLetterpadImage(nextLetterpad);
-    if (nextLetterpad) {
-      localStorage.setItem(LETTERPAD_STORAGE_KEY, nextLetterpad);
-    } else {
-      localStorage.removeItem(LETTERPAD_STORAGE_KEY);
-    }
+    persistLetterpadLocally(nextLetterpad);
   }, [companyProfiles, selectedCompanyProfileId, activeTemplateId]);
 
   useEffect(() => {
@@ -494,7 +546,9 @@ function App() {
 
     const syncInitialState = async () => {
       setSaveStatus('saving');
-      let sourceProfiles = companyProfiles;
+      setCompanyProfilesError('');
+      const scopedLocalProfiles = loadCompanyProfiles(currentUserId);
+      let sourceProfiles = scopedLocalProfiles;
       let sourceSelectedProfileId = selectedCompanyProfileId;
       let sourceDefaultProfileId = defaultCompanyProfileId;
 
@@ -608,35 +662,40 @@ function App() {
             id: isUuid(profile.id) ? profile.id : generateUuid(),
           }))
         : [];
+      if (profilesReadError) {
+        resolvedProfiles = localNormalizedProfiles;
+        setCompanyProfilesError('Could not load company profiles from Supabase. Showing locally cached profiles.');
+      } else if (cloudMappedProfiles.length > 0) {
+        resolvedProfiles = cloudMappedProfiles;
+      } else {
+        resolvedProfiles = localNormalizedProfiles;
 
-      const mergedById = new Map();
-      cloudMappedProfiles.forEach((profile) => {
-        mergedById.set(profile.id, profile);
-      });
-      localNormalizedProfiles.forEach((profile) => {
-        mergedById.set(profile.id, {
-          ...(mergedById.get(profile.id) || {}),
-          ...profile,
-        });
-      });
+        if (localNormalizedProfiles.length > 0) {
+          const { error: seedProfilesError } = await supabase
+            .from(SUPABASE_COMPANY_PROFILES_TABLE)
+            .upsert(
+              localNormalizedProfiles.map((profile) => toCompanyProfileRow(profile, currentUserId)),
+              { onConflict: 'id' }
+            );
 
-      resolvedProfiles = Array.from(mergedById.values());
-
-      if (resolvedProfiles.length > 0) {
-        const mergedRows = resolvedProfiles.map((profile) => toCompanyProfileRow(profile, currentUserId));
-        await supabase
-          .from(SUPABASE_COMPANY_PROFILES_TABLE)
-          .upsert(mergedRows, { onConflict: 'id' });
+          if (seedProfilesError) {
+            setCompanyProfilesError('Company profiles loaded locally, but syncing them to Supabase failed.');
+          }
+        }
       }
 
-      if (resolvedProfiles.length > 0) {
-        setCompanyProfiles(resolvedProfiles);
-        const selectedExists = resolvedProfiles.some((profile) => profile.id === sourceSelectedProfileId);
-        const defaultExists = resolvedProfiles.some((profile) => profile.id === sourceDefaultProfileId);
-        if (!selectedExists) setSelectedCompanyProfileId('');
-        if (!defaultExists) setDefaultCompanyProfileId('');
+      setCompanyProfiles(resolvedProfiles);
+      try {
+        persistCompanyProfilesLocally(currentUserId, resolvedProfiles);
+      } catch {
+        setCompanyProfilesError((prev) => prev || 'Company profiles could not be cached locally on this device.');
       }
-      previousCompanyProfilesRef.current = resolvedProfiles.length > 0 ? resolvedProfiles : sourceProfiles;
+
+      const selectedExists = resolvedProfiles.some((profile) => profile.id === sourceSelectedProfileId);
+      const defaultExists = resolvedProfiles.some((profile) => profile.id === sourceDefaultProfileId);
+      if (!selectedExists) setSelectedCompanyProfileId('');
+      if (!defaultExists) setDefaultCompanyProfileId('');
+      previousCompanyProfilesRef.current = resolvedProfiles;
       setIsCloudStateReady(true);
       setIsCompanyProfilesSyncReady(true);
     };
@@ -686,6 +745,7 @@ function App() {
     if (!supabase || !currentUserId || !isCompanyProfilesSyncReady) return;
 
     const syncCompanyProfiles = async () => {
+      setCompanyProfilesError('');
       const previousProfiles = previousCompanyProfilesRef.current || [];
       const previousIds = new Set(previousProfiles.map((profile) => profile.id));
       const nextIds = new Set(companyProfiles.map((profile) => profile.id));
@@ -694,11 +754,15 @@ function App() {
         .map((profile) => profile.id);
 
       if (deletedIds.length > 0) {
-        await supabase
+        const { error: deleteError } = await supabase
           .from(SUPABASE_COMPANY_PROFILES_TABLE)
           .delete()
           .eq('user_id', currentUserId)
           .in('id', deletedIds);
+        if (deleteError) {
+          setCompanyProfilesError(deleteError.message || 'Failed to delete company profiles from Supabase.');
+          return;
+        }
       }
 
       if (companyProfiles.length > 0) {
@@ -712,14 +776,22 @@ function App() {
           )
         );
 
-        await supabase
+        const { error: upsertError } = await supabase
           .from(SUPABASE_COMPANY_PROFILES_TABLE)
           .upsert(upsertRows, { onConflict: 'id' });
+        if (upsertError) {
+          setCompanyProfilesError(upsertError.message || 'Failed to sync company profiles to Supabase.');
+          return;
+        }
       } else if (previousIds.size > 0) {
-        await supabase
+        const { error: deleteAllError } = await supabase
           .from(SUPABASE_COMPANY_PROFILES_TABLE)
           .delete()
           .eq('user_id', currentUserId);
+        if (deleteAllError) {
+          setCompanyProfilesError(deleteAllError.message || 'Failed to clear company profiles from Supabase.');
+          return;
+        }
       }
 
       previousCompanyProfilesRef.current = companyProfiles;
@@ -847,7 +919,7 @@ function App() {
   }
 
   return (
-    <div className="bg-slate-100 min-h-screen overflow-hidden font-sans">
+    <div className="bg-slate-100 h-screen overflow-hidden font-sans">
       <Sidebar
         templates={TEMPLATES}
         activeTemplateId={activeTemplateId}
@@ -866,11 +938,14 @@ function App() {
         onLogout={handleLogout}
         onChangePassword={handleChangePassword}
         letterpadError={letterpadError}
+        companyProfilesError={companyProfilesError}
         onDismissLetterpadError={() => setLetterpadError('')}
+        onRefreshCompanyProfiles={refreshCompanyProfilesFromDatabase}
+        companyProfilesSyncStatus={companyProfilesSyncStatus}
       />
 
-      <div className="md:pl-72">
-        <div className="flex min-h-screen overflow-hidden">
+      <div className="md:pl-72 h-full overflow-hidden">
+        <div className="flex h-full overflow-hidden">
           <LetterForm
             template={activeTemplate}
             data={formData}
@@ -880,6 +955,8 @@ function App() {
             selectedCompanyProfileId={selectedCompanyProfileId}
             onSelectCompanyProfile={handleCompanyProfileSelect}
             saveStatus={saveStatus}
+            onSyncCompanyProfiles={refreshCompanyProfilesFromDatabase}
+            companyProfilesSyncStatus={companyProfilesSyncStatus}
             onUndo={handleUndo}
             onRedo={handleRedo}
             canUndo={formHistoryPast.length > 0}
