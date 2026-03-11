@@ -1,6 +1,6 @@
 import React from 'react';
 
-const LetterPreview = React.forwardRef(({ template, data, letterpadImage }, ref) => {
+const LetterPreview = React.forwardRef(({ template, data, letterpadImage, zoom = 1 }, ref) => {
     if (!template) return null;
     const isMarketPriceQuotation = template.id === 'market-price-quotation';
     const isBiddingTemplate = template.group === 'bidding';
@@ -71,6 +71,33 @@ const LetterPreview = React.forwardRef(({ template, data, letterpadImage }, ref)
     };
     const bidContentTypographyClass = isBiddingTemplate ? 'text-[11pt]' : 'text-[12pt]';
     const bidContentLineHeight = isBiddingTemplate ? '1' : undefined;
+    const previewScale = Number.isFinite(zoom) && zoom > 0 ? zoom : 1;
+    const previewWidth = `${210 * previewScale}mm`;
+
+    const previewPageStyle = {
+        width: '210mm',
+        height: '297mm',
+        paddingTop: '5.72cm',
+        paddingBottom: '1.57cm',
+        paddingLeft: '2.54cm',
+        paddingRight: '2.54cm',
+        margin: '0 auto',
+        fontFamily: 'Noto Sans Nepali, Arial',
+        fontSize: '12pt',
+        lineHeight: '1.6',
+        boxSizing: 'border-box',
+    };
+
+    const previewScreenWrapperStyle = {
+        width: previewWidth,
+        margin: '0 auto',
+    };
+
+    const previewScreenScaleStyle = {
+        width: '210mm',
+        transform: `scale(${previewScale})`,
+        transformOrigin: 'top center',
+    };
 
     return (
         <div className="flex-1 bg-slate-200 p-4 md:p-8 overflow-y-auto h-full min-h-0 print:h-auto print:bg-white print:p-0">
@@ -78,21 +105,11 @@ const LetterPreview = React.forwardRef(({ template, data, letterpadImage }, ref)
                 ref={ref}
                 className="space-y-6 print:space-y-0"
             >
+                <div className="mx-auto print:w-auto" style={previewScreenWrapperStyle}>
+                <div className="print:contents" style={previewScreenScaleStyle}>
                 <div
-                    className="a4-container shadow-xl mx-auto bg-white flex flex-col relative"
-                    style={{
-                        width: '210mm',
-                        height: '297mm',
-                        paddingTop: '5.72cm',
-                        paddingBottom: '1.57cm',
-                        paddingLeft: '2.54cm',
-                        paddingRight: '2.54cm',
-                        margin: '0 auto',
-                        fontFamily: 'Noto Sans Nepali, Arial',
-                        fontSize: '12pt',
-                        lineHeight: '1.6',
-                        boxSizing: 'border-box',
-                    }}
+                    className="a4-container shadow-xl mx-auto bg-white flex flex-col relative print:shadow-none"
+                    style={previewPageStyle}
                 >
                     {letterpadImage && (
                         <img
@@ -216,6 +233,8 @@ const LetterPreview = React.forwardRef(({ template, data, letterpadImage }, ref)
                         />
                     )}
                 </div>
+                </div>
+                </div>
 
                 {hasSecondPage && (
                     <>
@@ -224,21 +243,11 @@ const LetterPreview = React.forwardRef(({ template, data, letterpadImage }, ref)
                             <span>Page Break</span>
                             <div className="h-px bg-slate-300 flex-1" />
                         </div>
+                        <div className="mx-auto print:w-auto" style={previewScreenWrapperStyle}>
+                        <div className="print:contents" style={previewScreenScaleStyle}>
                         <div
-                            className="a4-container shadow-xl mx-auto bg-white flex flex-col relative print:break-before-page"
-                            style={{
-                                width: '210mm',
-                                height: '297mm',
-                                paddingTop: '5.72cm',
-                                paddingBottom: '1.57cm',
-                                paddingLeft: '2.54cm',
-                                paddingRight: '2.54cm',
-                                margin: '0 auto',
-                                fontFamily: 'Noto Sans Nepali, Arial',
-                                fontSize: '12pt',
-                                lineHeight: '1.6',
-                                boxSizing: 'border-box',
-                            }}
+                            className="a4-container shadow-xl mx-auto bg-white flex flex-col relative print:break-before-page print:shadow-none"
+                            style={previewPageStyle}
                         >
                             {letterpadImage && (
                                 <img
@@ -275,6 +284,8 @@ const LetterPreview = React.forwardRef(({ template, data, letterpadImage }, ref)
                                 />
                             )}
                         </div>
+                        </div>
+                        </div>
                     </>
                 )}
 
@@ -285,21 +296,11 @@ const LetterPreview = React.forwardRef(({ template, data, letterpadImage }, ref)
                             <span>Page Break</span>
                             <div className="h-px bg-slate-300 flex-1" />
                         </div>
+                        <div className="mx-auto print:w-auto" style={previewScreenWrapperStyle}>
+                        <div className="print:contents" style={previewScreenScaleStyle}>
                         <div
-                            className="a4-container shadow-xl mx-auto bg-white flex flex-col relative print:break-before-page"
-                            style={{
-                                width: '210mm',
-                                height: '297mm',
-                                paddingTop: '5.72cm',
-                                paddingBottom: '1.57cm',
-                                paddingLeft: '2.54cm',
-                                paddingRight: '2.54cm',
-                                margin: '0 auto',
-                                fontFamily: 'Noto Sans Nepali, Arial',
-                                fontSize: '12pt',
-                                lineHeight: '1.6',
-                                boxSizing: 'border-box',
-                            }}
+                            className="a4-container shadow-xl mx-auto bg-white flex flex-col relative print:break-before-page print:shadow-none"
+                            style={previewPageStyle}
                         >
                             {letterpadImage && (
                                 <img
@@ -335,6 +336,8 @@ const LetterPreview = React.forwardRef(({ template, data, letterpadImage }, ref)
                                     }}
                                 />
                             )}
+                        </div>
+                        </div>
                         </div>
                     </>
                 )}
