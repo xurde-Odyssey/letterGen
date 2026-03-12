@@ -449,11 +449,16 @@ const LetterForm = ({
                                         <option value="" disabled>
                                             {field.placeholder || `${field.label} छान्नुहोस्...`}
                                         </option>
-                                        {field.options?.map((option) => (
-                                            <option key={option} value={option}>
-                                                {option}
-                                            </option>
-                                        ))}
+                                        {field.options?.map((option) => {
+                                            const optionValue = typeof option === 'string' ? option : option.value;
+                                            const optionLabel = typeof option === 'string' ? option : option.label;
+
+                                            return (
+                                                <option key={optionValue} value={optionValue}>
+                                                    {optionLabel}
+                                                </option>
+                                            );
+                                        })}
                                     </select>
                                 ) : field.type === 'text' && Array.isArray(field.suggestions) && field.suggestions.length > 0 ? (
                                     <>
