@@ -12,7 +12,7 @@ const NORMAL_TEMPLATES = [
                 label: 'नमुना छनोट (Variant)',
                 type: 'select',
                 defaultValue: 'नमुना १',
-                options: ['नमुना १', 'नमुना २'],
+                options: ['नमुना १ मिती / सुचना रहित', 'नमुना २'],
             },
             {
                 id: 'Addressee_Title',
@@ -64,7 +64,10 @@ ${introParagraph}
                 label: 'नमुना छनोट (Variant)',
                 type: 'select',
                 defaultValue: 'नमुना १',
-                options: ['नमुना १', 'नमुना २'],
+                options: [
+                    { value: 'नमुना १', label: 'नमुना १ मिती / सुचना रहित' },
+                    { value: 'नमुना २', label: 'नमुना २' },
+                ],
             },
             {
                 id: 'Addressee_Title',
@@ -412,7 +415,7 @@ ${dynamicPricingSentences}
                 label: 'नमुना छनोट (Variant)',
                 type: 'select',
                 defaultValue: 'नमुना १',
-                options: ['नमुना १', 'नमुना २'],
+                options: ['पत्र/सूचना नं रहित', 'पत्र/सूचना नं सहित'],
             },
             {
                 id: 'Addressee_Title',
@@ -439,12 +442,18 @@ ${dynamicPricingSentences}
             { id: 'Company_Address', label: 'कम्पनीको ठेगाना', type: 'text' },
         ],
         content: (data) => {
-            const variant = data.Letter_Variant || 'नमुना १';
-            if (variant === 'नमुना २') {
+            const variant = data.Letter_Variant || 'पत्र/सूचना नं रहित';
+            const noticeReference = [
+                data.Notice_Number ? `पत्र/सूचना नं. ${data.Notice_Number}` : '',
+                data.Notice_Date ? `मिति ${data.Notice_Date}` : '',
+            ].filter(Boolean).join(' ');
+            const noticeIntro = noticeReference ? `तहाँ कार्यालयको ${noticeReference} ` : '';
+
+            if (variant === 'पत्र/सूचना नं सहित') {
                 return `
 महोदय,
 
-प्रस्तुत विषयमा तहाँ कार्यालयको पत्र/सूचना नं. ${data.Notice_Number || '[पत्र नं.]'} मिति ${data.Notice_Date || '[मिति]'} बमोजिम ${data.Product_Name || '[सामानको नाम]'} को प्रचलित बजार दर सम्बन्धी विवरण पेस गरिएको व्यहोरा जानकारी गराउँदछु।
+प्रस्तुत विषयमा यस कार्यालयको पत्र/सूचना नं. ${data.Notice_Number || '----'} मिति ${data.Notice_Date || '----'} गतेको पत्र बमोजिम ${data.Product_Name || '[सामानको नाम]'} को हालको प्रचलित बजार मूल्य उपलब्ध गराउन माग गरिएको हुँदा, सोही अनुरूपको बजार मूल्य विवरण पेश गरिएको जानकारी गराउँदछु।
 
 उक्त सामग्रीको इकाई ${data.Unit || '[इकाई]'} अनुसार ढुवानी तथा भ्याट सहित दर उल्लेख गरी बजार मूल्य विवरण तालिकामा प्रस्तुत गरिएको छ।`;
             }
@@ -452,7 +461,9 @@ ${dynamicPricingSentences}
             return `
 महोदय,
 
-प्रस्तुत विषयमा तहाँ कार्यालयको पत्र/सूचना नं. ${data.Notice_Number || '[पत्र नं.]'} मिति ${data.Notice_Date || '[मिति]'} गतेको पत्रमा ${data.Product_Name || '[सामानको नाम]'} को हालको बजार मूल्य माग गरिएको हुँदा निम्न तालिका अनुसार बजार मूल्य पेस गरिएको व्यहोरा जानकारी गर्दछु।`;
+प्रस्तुत विषयमा यस कार्यालयमा  ${data.Product_Name || '[सामानको नाम]'} को हालको प्रचलित बजार मूल्य उपलब्ध गराउन माग गरिएको हुँदा, सोही अनुरूपको बजार मूल्य विवरण पेश गरिएको जानकारी गराउँदछु।
+
+उक्त सामग्रीको ढुवानी तथा भ्याट सहित दर उल्लेख गरी बजार मूल्य विवरण तालिकामा प्रस्तुत गरिएको छ।`;
         }
     }
 ];
