@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     FileText,
     Printer,
@@ -138,31 +138,6 @@ const Sidebar = ({
         );
     };
 
-    useEffect(() => {
-        const inlineTyping = globalThis.NepaliInlineTyping;
-        if (!isCompanyModalOpen || companyFormLanguage !== 'nepali' || !inlineTyping || !companyFormRef.current) {
-            return undefined;
-        }
-
-        const bindings = inlineTyping.bind(
-            companyFormRef.current.querySelectorAll('[data-nepali-inline="true"]'),
-            {
-                transliterateWord,
-                triggerCharacters: [' '],
-                onConverted: ({ element, value }) => {
-                    const fieldKey = element.dataset.inlineFieldKey;
-                    if (!fieldKey) return;
-                    clearCompanyFormMessages();
-                    setCompanyForm((prev) => ({ ...prev, [fieldKey]: value }));
-                },
-            }
-        );
-
-        return () => {
-            bindings.forEach((binding) => binding?.destroy?.());
-        };
-    }, [companyFormLanguage, isCompanyModalOpen]);
-
     const editingCompany = useMemo(
         () => companyProfiles.find((profile) => profile.id === editingCompanyId) || null,
         [companyProfiles, editingCompanyId]
@@ -207,10 +182,35 @@ const Sidebar = ({
         return [groups.mostlyUsed, groups.normal, groups.bidding].filter((group) => group.templates.length > 0);
     }, [filteredTemplates]);
 
-    const clearCompanyFormMessages = () => {
+    const clearCompanyFormMessages = useCallback(() => {
         setCompanyFormError('');
         setCompanyFormSuccess('');
-    };
+    }, []);
+
+    useEffect(() => {
+        const inlineTyping = globalThis.NepaliInlineTyping;
+        if (!isCompanyModalOpen || companyFormLanguage !== 'nepali' || !inlineTyping || !companyFormRef.current) {
+            return undefined;
+        }
+
+        const bindings = inlineTyping.bind(
+            companyFormRef.current.querySelectorAll('[data-nepali-inline="true"]'),
+            {
+                transliterateWord,
+                triggerCharacters: [' '],
+                onConverted: ({ element, value }) => {
+                    const fieldKey = element.dataset.inlineFieldKey;
+                    if (!fieldKey) return;
+                    clearCompanyFormMessages();
+                    setCompanyForm((prev) => ({ ...prev, [fieldKey]: value }));
+                },
+            }
+        );
+
+        return () => {
+            bindings.forEach((binding) => binding?.destroy?.());
+        };
+    }, [clearCompanyFormMessages, companyFormLanguage, isCompanyModalOpen]);
 
     const openAddCompanyForm = () => {
         setEditingCompanyId('');
@@ -758,7 +758,12 @@ const Sidebar = ({
                                         )}
                                     </div>
 
-                                    <div className="pt-2 flex gap-2">
+                                    <div className="sticky bottom-0 -mx-4 -mb-4 mt-4 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur">
+                                        <div className="flex items-center justify-between gap-3">
+                                            <p className="text-xs text-slate-500">
+                                                {editingCompanyId ? 'Update this profile after reviewing the fields.' : 'Save this profile for reuse in Fill Details.'}
+                                            </p>
+                                            <div className="flex gap-2">
                                         <button
                                             type="button"
                                             onClick={handleSaveCompany}
@@ -787,6 +792,8 @@ const Sidebar = ({
                                         >
                                             Reset
                                         </button>
+                                            </div>
+                                        </div>
                                     </div>
                                 </section>
 
