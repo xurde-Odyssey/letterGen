@@ -1,5 +1,13 @@
 import { BIDDING_TEMPLATES } from './biddingTemplates';
 
+const COMMON_PRODUCT_NAME_SUGGESTIONS = [
+    'ध्वनि यन्त्र',
+    'सेमेन्ट ब्रेन्च (फलैचा) ',
+    'बायो-स्यान्ड फिल्टर',
+    'कृषि हलो (Bed Maker)',
+    'कृषि सामग्री आपूर्ति',
+];
+
 const NORMAL_TEMPLATES = [
     {
         id: 'vendor-registration',
@@ -88,13 +96,7 @@ ${introParagraph}
                 id: 'Product_or_Service_Name',
                 label: 'सामान/सेवाको नाम',
                 type: 'text',
-                suggestions: [
-                    'ध्वनि यन्त्र',
-                    'सेमेन्ट ब्रेन्च (फलैचा) ',
-                    'बायो-स्यान्ड फिल्टर',
-                    'कृषि हलो (Bed Maker)',
-                    'कृषि सामग्री आपूर्ति',
-                ],
+                suggestions: COMMON_PRODUCT_NAME_SUGGESTIONS,
             },
             { id: 'Amount', label: 'रकम अंकमा', type: 'text', placeholder: '१०५०० /-' },
             { id: 'Amount_In_Words', label: 'रकम अक्षरमा', type: 'text', placeholder: 'दस हजार पाँच सय रुपैंया मात्र /-' },
@@ -434,7 +436,7 @@ ${dynamicPricingSentences}
             { id: 'Office_Address', label: 'कार्यालयको ठेगाना', type: 'text' },
             { id: 'Notice_Number', label: 'पत्र/सूचना नं.', type: 'text' },
             { id: 'Notice_Date', label: 'पत्रको मिति', type: 'text', placeholder: '२०८०/०१/०१' },
-            { id: 'Product_Name', label: 'सामानको नाम', type: 'text' },
+            { id: 'Product_Name', label: 'सामानको नाम', type: 'text', suggestions: COMMON_PRODUCT_NAME_SUGGESTIONS },
             { id: 'Unit', label: 'इकाई', type: 'text', placeholder: 'के.जी., कि.ग्रा., टन, आदि', defaultValue: 'पिस' },
             { id: 'Rate_Amount', label: 'दर (रु.)', type: 'text' },
             { id: 'Your_Name', label: 'निवेदकको नाम', type: 'text' },

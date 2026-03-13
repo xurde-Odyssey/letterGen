@@ -20,6 +20,54 @@ const PREVIEW_ZOOM_OPTIONS = [
   { label: '110%', value: 1.1 },
 ];
 
+const getSessionUserId = (session) => session?.user?.id || null;
+const getUnifiedStatus = ({
+  saveStatus,
+  saveStatusError,
+  companyProfilesSaveStatus,
+  companyProfilesSaveError,
+  companyProfilesSyncStatus,
+  companyProfilesError,
+}) => {
+  if (companyProfilesSaveStatus === 'saving') {
+    return { tone: 'saving', label: 'Saving profiles...', detail: '' };
+  }
+
+  if (companyProfilesSyncStatus === 'syncing') {
+    return { tone: 'saving', label: 'Syncing profiles...', detail: '' };
+  }
+
+  if (companyProfilesSaveStatus === 'error') {
+    return {
+      tone: 'error',
+      label: 'Profile save failed',
+      detail: companyProfilesSaveError || companyProfilesError || '',
+    };
+  }
+
+  if (companyProfilesSyncStatus === 'error') {
+    return {
+      tone: 'error',
+      label: 'Profile sync failed',
+      detail: companyProfilesError || companyProfilesSaveError || '',
+    };
+  }
+
+  if (saveStatus === 'saving') {
+    return { tone: 'saving', label: 'Saving draft...', detail: '' };
+  }
+
+  if (saveStatus === 'error') {
+    return { tone: 'error', label: 'Draft save failed', detail: saveStatusError || '' };
+  }
+
+  if (companyProfilesSaveStatus === 'saved') {
+    return { tone: 'saved', label: 'Profiles synced', detail: '' };
+  }
+
+  return { tone: 'saved', label: 'All changes saved', detail: '' };
+};
+
 const loadSavedDraft = () => {
   try {
     const raw = localStorage.getItem(DRAFT_STORAGE_KEY);
@@ -113,6 +161,7 @@ function App() {
   const [authSession, setAuthSession] = useState(null);
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
+  const [isLoginPasswordVisible, setIsLoginPasswordVisible] = useState(false);
   const [loginError, setLoginError] = useState('');
 
   const [activeTemplateId, setActiveTemplateId] = useState(() => {
@@ -126,11 +175,14 @@ function App() {
   const [companyProfiles, setCompanyProfiles] = useState([]);
   const [companyProfilesError, setCompanyProfilesError] = useState('');
   const [companyProfilesSyncStatus, setCompanyProfilesSyncStatus] = useState('idle');
+  const [companyProfilesSaveStatus, setCompanyProfilesSaveStatus] = useState('idle');
+  const [companyProfilesSaveError, setCompanyProfilesSaveError] = useState('');
   const [selectedCompanyProfileId, setSelectedCompanyProfileId] = useState(() => savedDraft?.selectedCompanyProfileId || '');
   const [defaultCompanyProfileId, setDefaultCompanyProfileId] = useState(() => savedDraft?.defaultCompanyProfileId || '');
   const [letterpadImage, setLetterpadImage] = useState(savedLetterpadImage);
   const [letterpadError, setLetterpadError] = useState('');
   const [saveStatus, setSaveStatus] = useState('saved');
+  const [saveStatusError, setSaveStatusError] = useState('');
   const [previewZoom, setPreviewZoom] = useState(1);
   const [formHistoryPast, setFormHistoryPast] = useState([]);
   const [formHistoryFuture, setFormHistoryFuture] = useState([]);
@@ -141,9 +193,19 @@ function App() {
   const [isCompanyProfilesSyncReady, setIsCompanyProfilesSyncReady] = useState(false);
 
   const activeTemplate = TEMPLATES.find((t) => t.id === activeTemplateId);
+  const unifiedStatus = getUnifiedStatus({
+    saveStatus,
+    saveStatusError,
+    companyProfilesSaveStatus,
+    companyProfilesSaveError,
+    companyProfilesSyncStatus,
+    companyProfilesError,
+  });
   const printRef = useRef(null);
   const inactivityTimerRef = useRef(null);
   const previousCompanyProfilesRef = useRef(companyProfiles);
+  const currentCompanyProfilesRef = useRef(companyProfiles);
+  const companyProfilesDirtyBeforeSyncRef = useRef(false);
   const currentUserId = authSession?.user?.id || null;
 
   const handlePrint = useReactToPrint({
@@ -180,6 +242,8 @@ function App() {
     if (error) {
       setCompanyProfilesError(error.message || 'Failed to refresh company profiles from Supabase.');
       setCompanyProfilesSyncStatus('error');
+      setCompanyProfilesSaveStatus('error');
+      setCompanyProfilesSaveError(error.message || 'Failed to refresh company profiles from Supabase.');
       return;
     }
 
@@ -199,6 +263,8 @@ function App() {
     if (!defaultExists) setDefaultCompanyProfileId('');
 
     setCompanyProfilesSyncStatus('synced');
+    setCompanyProfilesSaveStatus('saved');
+    setCompanyProfilesSaveError('');
   };
 
   const handleLogout = async () => {
@@ -238,19 +304,30 @@ function App() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
-      setAuthSession(session || null);
-      setCompanyProfiles([]);
-      setCompanyProfilesError('');
-      setCompanyProfilesSyncStatus('idle');
-      setIsCloudStateReady(false);
-      setIsCompanyProfilesSyncReady(false);
+      const nextSession = session || null;
+      const previousUserId = getSessionUserId(authSession);
+      const nextUserId = getSessionUserId(nextSession);
+
+      setAuthSession(nextSession);
+
+      if (previousUserId !== nextUserId) {
+        setCompanyProfiles([]);
+        setCompanyProfilesError('');
+        setCompanyProfilesSyncStatus('idle');
+        setCompanyProfilesSaveStatus('idle');
+        setCompanyProfilesSaveError('');
+        setSaveStatusError('');
+        setIsCloudStateReady(false);
+        setIsCompanyProfilesSyncReady(false);
+        companyProfilesDirtyBeforeSyncRef.current = false;
+      }
     });
 
     return () => {
       isMounted = false;
       subscription.unsubscribe();
     };
-  }, []);
+  }, [authSession]);
 
   useEffect(() => {
     if (!currentUserId) {
@@ -275,6 +352,23 @@ function App() {
       clearTimeout(inactivityTimerRef.current);
     };
   }, [currentUserId]);
+
+  useEffect(() => {
+    currentCompanyProfilesRef.current = companyProfiles;
+  }, [companyProfiles]);
+
+  useEffect(() => {
+    if (companyProfilesSaveStatus !== 'saved') {
+      return undefined;
+    }
+
+    const timer = window.setTimeout(() => {
+      setCompanyProfilesSaveStatus('idle');
+      setCompanyProfilesSaveError('');
+    }, 2500);
+
+    return () => window.clearTimeout(timer);
+  }, [companyProfilesSaveStatus]);
 
   const handleTemplateSelect = (id) => {
     setPreviousTemplateId(activeTemplateId);
@@ -372,6 +466,12 @@ function App() {
   };
 
   const handleAddCompanyProfile = (profileInput) => {
+    if (!isCompanyProfilesSyncReady) {
+      companyProfilesDirtyBeforeSyncRef.current = true;
+    }
+    setCompanyProfilesSaveStatus('saving');
+    setCompanyProfilesSaveError('');
+
     const profile = {
       id: generateUuid(),
       companyName: profileInput.companyName || '',
@@ -388,6 +488,11 @@ function App() {
   const handleDuplicateCompanyProfile = (profileId) => {
     const source = companyProfiles.find((profile) => profile.id === profileId);
     if (!source) return;
+    if (!isCompanyProfilesSyncReady) {
+      companyProfilesDirtyBeforeSyncRef.current = true;
+    }
+    setCompanyProfilesSaveStatus('saving');
+    setCompanyProfilesSaveError('');
     setCompanyProfiles((prev) => [
       ...prev,
       {
@@ -403,6 +508,12 @@ function App() {
   };
 
   const handleUpdateCompanyProfile = (profileId, profileInput) => {
+    if (!isCompanyProfilesSyncReady) {
+      companyProfilesDirtyBeforeSyncRef.current = true;
+    }
+    setCompanyProfilesSaveStatus('saving');
+    setCompanyProfilesSaveError('');
+
     setCompanyProfiles((prev) =>
       prev.map((profile) =>
         profile.id === profileId
@@ -421,6 +532,12 @@ function App() {
   };
 
   const handleDeleteCompanyProfile = (profileId) => {
+    if (!isCompanyProfilesSyncReady) {
+      companyProfilesDirtyBeforeSyncRef.current = true;
+    }
+    setCompanyProfilesSaveStatus('saving');
+    setCompanyProfilesSaveError('');
+
     setCompanyProfiles((prev) => prev.filter((profile) => profile.id !== profileId));
 
     if (selectedCompanyProfileId === profileId) {
@@ -552,6 +669,7 @@ function App() {
 
     const syncInitialState = async () => {
       setSaveStatus('saving');
+      setSaveStatusError('');
       setCompanyProfilesError('');
       const scopedLocalProfiles = loadCompanyProfiles(currentUserId);
       let sourceProfiles = scopedLocalProfiles;
@@ -566,6 +684,7 @@ function App() {
 
       if (error) {
         setSaveStatus('error');
+        setSaveStatusError(error.message || `Failed to read ${SUPABASE_APP_STATE_TABLE}.`);
         setIsCloudStateReady(true);
         setIsCompanyProfilesSyncReady(true);
         return;
@@ -588,6 +707,7 @@ function App() {
           payload: localPayload,
         });
         setSaveStatus(upsertError ? 'error' : 'saved');
+        setSaveStatusError(upsertError ? (upsertError.message || `Failed to write ${SUPABASE_APP_STATE_TABLE}.`) : '');
       } else {
         const cloudPayload = cloudState.payload || {};
         const cloudUpdatedAt = cloudPayload.updatedAt || cloudState.updated_at || '';
@@ -649,6 +769,7 @@ function App() {
             payload: localPayload,
           });
           setSaveStatus(upsertError ? 'error' : 'saved');
+          setSaveStatusError(upsertError ? (upsertError.message || `Failed to write ${SUPABASE_APP_STATE_TABLE}.`) : '');
         }
       }
 
@@ -690,7 +811,25 @@ function App() {
         }
       }
 
+      if (companyProfilesDirtyBeforeSyncRef.current) {
+        const pendingLocalProfiles = Array.isArray(currentCompanyProfilesRef.current)
+          ? currentCompanyProfilesRef.current.map((profile) => ({
+              ...profile,
+              id: isUuid(profile.id) ? profile.id : generateUuid(),
+            }))
+          : [];
+
+        if (pendingLocalProfiles.length > 0) {
+          const mergedProfiles = new Map(resolvedProfiles.map((profile) => [profile.id, profile]));
+          pendingLocalProfiles.forEach((profile) => {
+            mergedProfiles.set(profile.id, profile);
+          });
+          resolvedProfiles = Array.from(mergedProfiles.values());
+        }
+      }
+
       setCompanyProfiles(resolvedProfiles);
+      companyProfilesDirtyBeforeSyncRef.current = false;
       try {
         persistCompanyProfilesLocally(currentUserId, resolvedProfiles);
       } catch {
@@ -724,12 +863,14 @@ function App() {
     };
 
     setSaveStatus('saving');
+    setSaveStatusError('');
     const timer = setTimeout(async () => {
       const { error } = await supabase.from(SUPABASE_APP_STATE_TABLE).upsert({
         user_id: currentUserId,
         payload,
       });
       setSaveStatus(error ? 'error' : 'saved');
+      setSaveStatusError(error ? (error.message || `Failed to write ${SUPABASE_APP_STATE_TABLE}.`) : '');
     }, 500);
 
     return () => clearTimeout(timer);
@@ -753,6 +894,13 @@ function App() {
     const syncCompanyProfiles = async () => {
       setCompanyProfilesError('');
       const previousProfiles = previousCompanyProfilesRef.current || [];
+      const hasChanges = JSON.stringify(previousProfiles) !== JSON.stringify(companyProfiles);
+      if (!hasChanges) {
+        return;
+      }
+
+      setCompanyProfilesSaveStatus('saving');
+      setCompanyProfilesSaveError('');
       const previousIds = new Set(previousProfiles.map((profile) => profile.id));
       const nextIds = new Set(companyProfiles.map((profile) => profile.id));
       const deletedIds = previousProfiles
@@ -766,7 +914,10 @@ function App() {
           .eq('user_id', currentUserId)
           .in('id', deletedIds);
         if (deleteError) {
-          setCompanyProfilesError(deleteError.message || 'Failed to delete company profiles from Supabase.');
+          const nextError = deleteError.message || 'Failed to delete company profiles from Supabase.';
+          setCompanyProfilesError(nextError);
+          setCompanyProfilesSaveStatus('error');
+          setCompanyProfilesSaveError(nextError);
           return;
         }
       }
@@ -786,7 +937,10 @@ function App() {
           .from(SUPABASE_COMPANY_PROFILES_TABLE)
           .upsert(upsertRows, { onConflict: 'id' });
         if (upsertError) {
-          setCompanyProfilesError(upsertError.message || 'Failed to sync company profiles to Supabase.');
+          const nextError = upsertError.message || 'Failed to sync company profiles to Supabase.';
+          setCompanyProfilesError(nextError);
+          setCompanyProfilesSaveStatus('error');
+          setCompanyProfilesSaveError(nextError);
           return;
         }
       } else if (previousIds.size > 0) {
@@ -795,12 +949,17 @@ function App() {
           .delete()
           .eq('user_id', currentUserId);
         if (deleteAllError) {
-          setCompanyProfilesError(deleteAllError.message || 'Failed to clear company profiles from Supabase.');
+          const nextError = deleteAllError.message || 'Failed to clear company profiles from Supabase.';
+          setCompanyProfilesError(nextError);
+          setCompanyProfilesSaveStatus('error');
+          setCompanyProfilesSaveError(nextError);
           return;
         }
       }
 
       previousCompanyProfilesRef.current = companyProfiles;
+      setCompanyProfilesSaveStatus('saved');
+      setCompanyProfilesSaveError('');
     };
 
     syncCompanyProfiles();
@@ -902,14 +1061,23 @@ function App() {
             </div>
             <div className="space-y-1.5">
               <label className="text-sm font-semibold text-slate-700 block">Password</label>
-              <input
-                type="password"
-                value={loginPassword}
-                onChange={(e) => setLoginPassword(e.target.value)}
-                className="w-full p-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none text-sm"
-                placeholder="Enter password"
-                autoComplete="current-password"
-              />
+              <div className="relative">
+                <input
+                  type={isLoginPasswordVisible ? 'text' : 'password'}
+                  value={loginPassword}
+                  onChange={(e) => setLoginPassword(e.target.value)}
+                  className="w-full p-3 pr-16 border border-slate-200 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none text-sm"
+                  placeholder="Enter password"
+                  autoComplete="current-password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setIsLoginPasswordVisible((prev) => !prev)}
+                  className="absolute inset-y-0 right-0 px-3 text-xs font-semibold text-slate-500 hover:text-slate-700"
+                >
+                  {isLoginPasswordVisible ? 'Hide' : 'Show'}
+                </button>
+              </div>
             </div>
             {loginError && <p className="text-sm text-red-600">{loginError}</p>}
             <button
@@ -941,6 +1109,8 @@ function App() {
         onDuplicateCompanyProfile={handleDuplicateCompanyProfile}
         defaultCompanyProfileId={defaultCompanyProfileId}
         onSetDefaultCompanyProfile={handleSetDefaultCompanyProfile}
+        companyProfilesSaveStatus={companyProfilesSaveStatus}
+        companyProfilesSaveError={companyProfilesSaveError}
         onLogout={handleLogout}
         onChangePassword={handleChangePassword}
         letterpadError={letterpadError}
@@ -961,6 +1131,8 @@ function App() {
             selectedCompanyProfileId={selectedCompanyProfileId}
             onSelectCompanyProfile={handleCompanyProfileSelect}
             saveStatus={saveStatus}
+            saveStatusError={saveStatusError}
+            unifiedStatus={unifiedStatus}
             onSyncCompanyProfiles={refreshCompanyProfilesFromDatabase}
             companyProfilesSyncStatus={companyProfilesSyncStatus}
             onUndo={handleUndo}
