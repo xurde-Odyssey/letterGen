@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Trash2, Copy, Check, Upload, X, Undo2, Redo2 } from 'lucide-react';
+import { Trash2, Copy, Check, Upload, X, Undo2, Redo2, LoaderCircle } from 'lucide-react';
 import { cn } from '../utils/cn';
 import NepaliInputWithSuggestions from './NepaliInputWithSuggestions';
 import { getCurrentNepaliDate } from 'nepali/dates';
@@ -172,6 +172,8 @@ const LetterForm = ({
     selectedCompanyProfileId,
     onSelectCompanyProfile,
     saveStatus,
+    saveStatusError,
+    unifiedStatus,
     onSyncCompanyProfiles,
     companyProfilesSyncStatus,
     onUndo,
@@ -284,16 +286,35 @@ const LetterForm = ({
     const isValidPan = (value) => /^\d{9}$/.test(String(value || '').trim());
     const showNepaliDateQuickFill = template.enableNepaliDateQuickFill !== false && template.group !== 'bidding';
     const isBiddingTemplate = template.group === 'bidding';
+    const selectedCompanyProfile = companyProfiles.find((profile) => profile.id === selectedCompanyProfileId) || null;
     let previousSection = '';
 
     return (
         <div ref={formContainerRef} className="w-96 bg-white border-r border-slate-200 h-screen flex flex-col no-print shrink-0 overflow-hidden shadow-inner">
             <div className="sticky top-0 z-20 p-6 border-b border-slate-200 flex flex-col gap-4 bg-slate-50/95 backdrop-blur">
                 <div className="flex justify-between items-center">
-                    <h2 className="text-lg font-bold text-slate-800">Fill Details</h2>
-                    <span className="text-xs font-semibold text-slate-500">
-                        {saveStatus === 'saving' ? 'Saving...' : saveStatus === 'error' ? 'Save failed' : 'Saved'}
-                    </span>
+                    <div className="min-w-0 flex items-center gap-3">
+                        <h2 className="text-lg font-bold text-slate-800">Fill Details</h2>
+                        {unifiedStatus && (
+                            <div
+                                className={cn(
+                                    'inline-flex max-w-[220px] items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-semibold',
+                                    unifiedStatus.tone === 'saving' && 'border-brand-200 bg-brand-50 text-brand-700',
+                                    unifiedStatus.tone === 'saved' && 'border-emerald-200 bg-emerald-50 text-emerald-700',
+                                    unifiedStatus.tone === 'error' && 'border-red-200 bg-red-50 text-red-700'
+                                )}
+                                title={unifiedStatus.detail || unifiedStatus.label}
+                            >
+                                {unifiedStatus.tone === 'saving' && <LoaderCircle className="h-3.5 w-3.5 animate-spin" />}
+                                <span className="truncate">{unifiedStatus.label}</span>
+                            </div>
+                        )}
+                    </div>
+                    {unifiedStatus?.tone === 'error' && unifiedStatus.detail && (
+                        <span className="max-w-[220px] truncate text-[11px] font-medium text-red-600" title={unifiedStatus.detail}>
+                            {unifiedStatus.detail}
+                        </span>
+                    )}
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                     <button
@@ -383,6 +404,27 @@ const LetterForm = ({
                             </option>
                         ))}
                     </select>
+                    {selectedCompanyProfile && (
+                        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                            <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                    <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Active Company</p>
+                                    <p className="mt-1 truncate text-sm font-semibold text-slate-800">{selectedCompanyProfile.companyName}</p>
+                                    {selectedCompanyProfile.applicantName && (
+                                        <p className="mt-1 text-xs font-medium text-slate-600">{selectedCompanyProfile.applicantName}</p>
+                                    )}
+                                </div>
+                                {selectedCompanyProfile.panNo && (
+                                    <span className="rounded-full border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-600">
+                                        PAN {selectedCompanyProfile.panNo}
+                                    </span>
+                                )}
+                            </div>
+                            {selectedCompanyProfile.companyAddress && (
+                                <p className="mt-2 text-xs leading-5 text-slate-500">{selectedCompanyProfile.companyAddress}</p>
+                            )}
+                        </div>
+                    )}
                 </div>
 
                 {template.fields.map((field) => {

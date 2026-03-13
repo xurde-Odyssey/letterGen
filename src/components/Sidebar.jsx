@@ -14,6 +14,7 @@ import {
     Lock,
     Menu,
     Building2,
+    LoaderCircle,
 } from 'lucide-react';
 import { cn } from '../utils/cn';
 import { smartConverter, translateWords } from '../letter-app-js-utility/branch';
@@ -28,6 +29,10 @@ const EMPTY_COMPANY_FORM = {
     letterpadImage: '',
     signatureStampImage: '',
 };
+const COMPANY_FORM_LANGUAGE_OPTIONS = [
+    { id: 'english', label: 'English' },
+    { id: 'nepali', label: 'Unicode Nepali' },
+];
 
 const normalizeDigitsToAscii = (value) =>
     String(value || '').replace(/[०-९]/g, (digit) => String(digit.charCodeAt(0) - 2406));
@@ -40,6 +45,15 @@ const getInlineFieldProps = (fieldKey) => ({
     'data-nepali-inline': 'true',
     'data-inline-field-key': fieldKey,
 });
+
+const getProfileInitials = (value) => {
+    const parts = String(value || '').trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) {
+        return 'CP';
+    }
+    return parts.slice(0, 2).map((part) => part[0]).join('').toUpperCase();
+};
+
 const MOSTLY_USED_TEMPLATE_IDS = new Set([
     'vendor-registration',
     'payment-request',
@@ -62,6 +76,8 @@ const Sidebar = ({
     onDuplicateCompanyProfile,
     defaultCompanyProfileId,
     onSetDefaultCompanyProfile,
+    companyProfilesSaveStatus,
+    companyProfilesSaveError,
     onLogout,
     onChangePassword,
     letterpadError,
@@ -72,6 +88,7 @@ const Sidebar = ({
     const [isCompanyModalOpen, setIsCompanyModalOpen] = useState(false);
     const [editingCompanyId, setEditingCompanyId] = useState('');
     const [companyForm, setCompanyForm] = useState(EMPTY_COMPANY_FORM);
+    const [companyFormLanguage, setCompanyFormLanguage] = useState('nepali');
     const [templateSearch, setTemplateSearch] = useState('');
     const [companyFormError, setCompanyFormError] = useState('');
     const [companyFormSuccess, setCompanyFormSuccess] = useState('');
@@ -87,9 +104,43 @@ const Sidebar = ({
     const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
     const companyFormRef = useRef(null);
 
+    const renderCompanyProfilesStatus = (variant = 'sidebar') => {
+        if (!(companyProfilesSaveStatus === 'saving' || companyProfilesSaveStatus === 'saved' || companyProfilesSaveStatus === 'error')) {
+            return null;
+        }
+
+        const baseClass = variant === 'sidebar'
+            ? 'rounded-lg border px-3 py-2 text-xs font-semibold'
+            : 'rounded-lg border px-3 py-2 text-xs font-semibold';
+
+        return (
+            <div
+                className={cn(
+                    baseClass,
+                    companyProfilesSaveStatus === 'saving' && (variant === 'sidebar'
+                        ? 'border-brand-200/40 bg-white/10 text-white'
+                        : 'border-brand-200 bg-brand-50 text-brand-700'),
+                    companyProfilesSaveStatus === 'saved' && 'border-emerald-200 bg-emerald-50 text-emerald-700',
+                    companyProfilesSaveStatus === 'error' && 'border-red-200 bg-red-50 text-red-700'
+                )}
+            >
+                {companyProfilesSaveStatus === 'saving'
+                    ? (
+                        <span className="inline-flex items-center gap-2">
+                            <LoaderCircle className="w-3.5 h-3.5 animate-spin" />
+                            {variant === 'modal' && editingCompanyId ? 'Updating profile...' : 'Saving profiles...'}
+                        </span>
+                    )
+                    : companyProfilesSaveStatus === 'saved'
+                        ? 'Profiles synced'
+                        : companyProfilesSaveError || 'Profile save failed'}
+            </div>
+        );
+    };
+
     useEffect(() => {
         const inlineTyping = globalThis.NepaliInlineTyping;
-        if (!isCompanyModalOpen || !inlineTyping || !companyFormRef.current) {
+        if (!isCompanyModalOpen || companyFormLanguage !== 'nepali' || !inlineTyping || !companyFormRef.current) {
             return undefined;
         }
 
@@ -110,7 +161,7 @@ const Sidebar = ({
         return () => {
             bindings.forEach((binding) => binding?.destroy?.());
         };
-    }, [isCompanyModalOpen]);
+    }, [companyFormLanguage, isCompanyModalOpen]);
 
     const editingCompany = useMemo(
         () => companyProfiles.find((profile) => profile.id === editingCompanyId) || null,
@@ -164,6 +215,7 @@ const Sidebar = ({
     const openAddCompanyForm = () => {
         setEditingCompanyId('');
         setCompanyForm(EMPTY_COMPANY_FORM);
+        setCompanyFormLanguage('nepali');
         clearCompanyFormMessages();
     };
 
@@ -177,6 +229,7 @@ const Sidebar = ({
             letterpadImage: profile.letterpadImage || '',
             signatureStampImage: profile.signatureStampImage || '',
         });
+        setCompanyFormLanguage('nepali');
         clearCompanyFormMessages();
     };
 
@@ -500,25 +553,44 @@ const Sidebar = ({
                                 </div>
                                 <div className="space-y-2">
                                     {companyProfiles.length === 0 && (
-                                        <p className="text-xs text-slate-500">No profiles saved yet.</p>
+                                        <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-6 text-center">
+                                            <p className="text-sm font-semibold text-slate-700">No company profiles yet</p>
+                                            <p className="mt-1 text-xs text-slate-500">Create your first reusable company card to fill letters faster.</p>
+                                        </div>
                                     )}
                                     {companyProfiles.map((profile) => (
                                         <div
                                             key={profile.id}
                                             className={cn(
-                                                'p-3 rounded-lg border space-y-2',
+                                                'rounded-xl border p-3 space-y-3 transition-colors',
                                                 editingCompanyId === profile.id
-                                                    ? 'border-brand-300 bg-brand-50'
-                                                    : 'border-slate-200 bg-white'
+                                                    ? 'border-brand-300 bg-brand-50 shadow-sm'
+                                                    : 'border-slate-200 bg-white hover:border-slate-300'
                                             )}
                                         >
-                                            <p className="text-sm font-semibold text-slate-800">{profile.companyName}</p>
-                                            {defaultCompanyProfileId === profile.id && (
-                                                <p className="text-[11px] inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-100 text-amber-700">
-                                                    <Star className="w-3 h-3" />
-                                                    Default
-                                                </p>
-                                            )}
+                                            <div className="flex items-start gap-3">
+                                                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-xs font-bold text-slate-700">
+                                                    {getProfileInitials(profile.companyName)}
+                                                </div>
+                                                <div className="min-w-0 flex-1">
+                                                    <div className="flex flex-wrap items-center gap-2">
+                                                        <p className="truncate text-sm font-semibold text-slate-800">{profile.companyName}</p>
+                                                        {defaultCompanyProfileId === profile.id && (
+                                                            <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
+                                                                <Star className="w-3 h-3" />
+                                                                Default
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    {profile.applicantName && (
+                                                        <p className="mt-1 text-xs font-medium text-slate-600">{profile.applicantName}</p>
+                                                    )}
+                                                    <div className="mt-2 space-y-1 text-[11px] text-slate-500">
+                                                        {profile.panNo && <p>PAN: {profile.panNo}</p>}
+                                                        {profile.companyAddress && <p className="line-clamp-2">{profile.companyAddress}</p>}
+                                                    </div>
+                                                </div>
+                                            </div>
                                             <div className="flex gap-2 flex-wrap">
                                                 <button
                                                     type="button"
@@ -581,6 +653,24 @@ const Sidebar = ({
                                             {companyFormSuccess}
                                         </div>
                                     )}
+                                    {renderCompanyProfilesStatus('modal')}
+                                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-1 inline-flex gap-1">
+                                        {COMPANY_FORM_LANGUAGE_OPTIONS.map((option) => (
+                                            <button
+                                                key={option.id}
+                                                type="button"
+                                                onClick={() => setCompanyFormLanguage(option.id)}
+                                                className={cn(
+                                                    'rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors',
+                                                    companyFormLanguage === option.id
+                                                        ? 'bg-white text-brand-700 shadow-sm'
+                                                        : 'text-slate-500 hover:text-slate-700'
+                                                )}
+                                            >
+                                                {option.label}
+                                            </button>
+                                        ))}
+                                    </div>
                                     <input
                                         type="text"
                                         value={companyForm.companyName}
@@ -589,7 +679,7 @@ const Sidebar = ({
                                             setCompanyForm((prev) => ({ ...prev, companyName: e.target.value }));
                                         }}
                                         placeholder="Company Name"
-                                        {...getInlineFieldProps('companyName')}
+                                        {...(companyFormLanguage === 'nepali' ? getInlineFieldProps('companyName') : {})}
                                         className="w-full p-2.5 border border-slate-200 rounded-lg text-sm"
                                     />
                                     <input
@@ -600,7 +690,7 @@ const Sidebar = ({
                                             setCompanyForm((prev) => ({ ...prev, applicantName: e.target.value }));
                                         }}
                                         placeholder="Applicant Name"
-                                        {...getInlineFieldProps('applicantName')}
+                                        {...(companyFormLanguage === 'nepali' ? getInlineFieldProps('applicantName') : {})}
                                         className="w-full p-2.5 border border-slate-200 rounded-lg text-sm"
                                     />
                                     <input
@@ -611,7 +701,7 @@ const Sidebar = ({
                                             setCompanyForm((prev) => ({ ...prev, companyAddress: e.target.value }));
                                         }}
                                         placeholder="Company Address"
-                                        {...getInlineFieldProps('companyAddress')}
+                                        {...(companyFormLanguage === 'nepali' ? getInlineFieldProps('companyAddress') : {})}
                                         className="w-full p-2.5 border border-slate-200 rounded-lg text-sm"
                                     />
                                     <input
@@ -622,6 +712,7 @@ const Sidebar = ({
                                             setCompanyForm((prev) => ({ ...prev, panNo: e.target.value }));
                                         }}
                                         placeholder="PAN No. (9 digits)"
+                                        {...(companyFormLanguage === 'nepali' ? getInlineFieldProps('panNo') : {})}
                                         className="w-full p-2.5 border border-slate-200 rounded-lg text-sm"
                                     />
 
@@ -671,9 +762,23 @@ const Sidebar = ({
                                         <button
                                             type="button"
                                             onClick={handleSaveCompany}
-                                            className="px-4 py-2 rounded-lg bg-brand-600 text-white text-sm font-semibold hover:bg-brand-700"
+                                            className={cn(
+                                                'px-4 py-2 rounded-lg text-white text-sm font-semibold transition-colors',
+                                                companyProfilesSaveStatus === 'saving'
+                                                    ? 'bg-brand-500 animate-pulse'
+                                                    : 'bg-brand-600 hover:bg-brand-700'
+                                            )}
                                         >
-                                            {editingCompanyId ? 'Update Profile' : 'Save Profile'}
+                                            {companyProfilesSaveStatus === 'saving'
+                                                ? (
+                                                    <span className="inline-flex items-center gap-2">
+                                                        <LoaderCircle className="w-3.5 h-3.5 animate-spin" />
+                                                        Saving...
+                                                    </span>
+                                                )
+                                                : editingCompanyId
+                                                    ? 'Update Profile'
+                                                    : 'Save Profile'}
                                         </button>
                                         <button
                                             type="button"
