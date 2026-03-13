@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Trash2, Copy, Check, Upload, X, Undo2, Redo2, LoaderCircle } from 'lucide-react';
+import { Trash2, Copy, Check, Upload, X, Undo2, Redo2, LoaderCircle, GripVertical, ArrowUp, ArrowDown } from 'lucide-react';
 import { cn } from '../utils/cn';
 import NepaliInputWithSuggestions from './NepaliInputWithSuggestions';
 import { getCurrentNepaliDate } from 'nepali/dates';
@@ -162,6 +162,67 @@ const SECTION_META = {
         description: 'Subject, body, products, and other template-specific inputs.',
     },
 };
+const ATTACHMENT_ENABLED_TEMPLATE_IDS = new Set([
+    'vendor-registration',
+    'payment-request',
+    'cement-bench-quotation',
+    'market-price-quotation',
+]);
+const PROFILE_FIELD_SOURCE_MAP = {
+    Your_Company_Name: 'companyName',
+    Your_Name: 'applicantName',
+    Company_Address: 'companyAddress',
+    Pan_No: 'panNo',
+};
+
+let pdfRendererPromise;
+
+const loadPdfRenderer = async () => {
+    if (!pdfRendererPromise) {
+        pdfRendererPromise = Promise.all([
+            import('pdfjs-dist/legacy/build/pdf'),
+            import('pdfjs-dist/build/pdf.worker.min.mjs?url'),
+        ]).then(([pdfjsLib, workerModule]) => {
+            pdfjsLib.GlobalWorkerOptions.workerSrc = workerModule.default;
+            return pdfjsLib;
+        });
+    }
+
+    return pdfRendererPromise;
+};
+
+const renderPdfAttachmentPages = async (file) => {
+    const pdfjsLib = await loadPdfRenderer();
+    const buffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+    const pages = [];
+
+    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+        const page = await pdf.getPage(pageNumber);
+        const viewport = page.getViewport({ scale: 1.6 });
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+
+        await page.render({
+            canvasContext: context,
+            viewport,
+        }).promise;
+
+        pages.push({
+            id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            name: `${file.name} - Page ${pageNumber}`,
+            type: 'image/pdf-page',
+            src: canvas.toDataURL('image/png'),
+            sourceFileName: file.name,
+            pageNumber,
+        });
+    }
+
+    return pages;
+};
 
 const LetterForm = ({
     template,
@@ -171,8 +232,6 @@ const LetterForm = ({
     companyProfiles,
     selectedCompanyProfileId,
     onSelectCompanyProfile,
-    saveStatus,
-    saveStatusError,
     unifiedStatus,
     onSyncCompanyProfiles,
     companyProfilesSyncStatus,
@@ -184,7 +243,9 @@ const LetterForm = ({
     canCopyPreviousData,
 }) => {
     const [copied, setCopied] = useState(false);
+    const [draggedAttachmentId, setDraggedAttachmentId] = useState('');
     const formContainerRef = useRef(null);
+    const fieldSections = template?.fields.map((field) => getFieldSection(field)) || [];
 
     useEffect(() => {
         const inlineTyping = globalThis.NepaliInlineTyping;
@@ -283,11 +344,79 @@ const LetterForm = ({
         onChange('Stamp_Image', '');
     };
 
+    const handleAttachmentPagesUpload = (event) => {
+        const files = Array.from(event.target.files || []);
+        if (files.length === 0) return;
+
+        const unsupportedFile = files.find((file) => !file.type.startsWith('image/') && file.type !== 'application/pdf');
+        if (unsupportedFile) {
+            window.alert('This first version supports image and PDF attachments only.');
+            event.target.value = '';
+            return;
+        }
+
+        Promise.all(
+            files.map(
+                (file) => {
+                    if (file.type === 'application/pdf') {
+                        return renderPdfAttachmentPages(file);
+                    }
+
+                    return new Promise((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onload = () => resolve([{
+                            id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                            name: file.name,
+                            type: file.type,
+                            src: reader.result,
+                        }]);
+                        reader.onerror = () => reject(new Error(`Failed to read ${file.name}`));
+                        reader.readAsDataURL(file);
+                    });
+                }
+            )
+        )
+            .then((uploadedPages) => {
+                const existingPages = Array.isArray(data.Attachment_Pages) ? data.Attachment_Pages : [];
+                onChange('Attachment_Pages', [...existingPages, ...uploadedPages.flat()]);
+            })
+            .catch((error) => {
+                window.alert(error instanceof Error ? error.message : 'Failed to load attachment pages.');
+            })
+            .finally(() => {
+                event.target.value = '';
+            });
+    };
+
+    const removeAttachmentPage = (pageId) => {
+        if (!window.confirm('Are you sure you want to remove this attachment page?')) {
+            return;
+        }
+        const existingPages = Array.isArray(data.Attachment_Pages) ? data.Attachment_Pages : [];
+        onChange('Attachment_Pages', existingPages.filter((page) => page.id !== pageId));
+    };
+
+    const reorderAttachmentPages = (fromIndex, toIndex) => {
+        if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0) {
+            return;
+        }
+
+        const existingPages = Array.isArray(data.Attachment_Pages) ? [...data.Attachment_Pages] : [];
+        if (fromIndex >= existingPages.length || toIndex >= existingPages.length) {
+            return;
+        }
+
+        const [movedPage] = existingPages.splice(fromIndex, 1);
+        existingPages.splice(toIndex, 0, movedPage);
+        onChange('Attachment_Pages', existingPages);
+    };
+
     const isValidPan = (value) => /^\d{9}$/.test(String(value || '').trim());
     const showNepaliDateQuickFill = template.enableNepaliDateQuickFill !== false && template.group !== 'bidding';
     const isBiddingTemplate = template.group === 'bidding';
     const selectedCompanyProfile = companyProfiles.find((profile) => profile.id === selectedCompanyProfileId) || null;
-    let previousSection = '';
+    const supportsAttachmentPages = ATTACHMENT_ENABLED_TEMPLATE_IDS.has(template.id);
+    const attachmentPages = Array.isArray(data.Attachment_Pages) ? data.Attachment_Pages : [];
 
     return (
         <div ref={formContainerRef} className="w-96 bg-white border-r border-slate-200 h-screen flex flex-col no-print shrink-0 overflow-hidden shadow-inner">
@@ -427,15 +556,18 @@ const LetterForm = ({
                     )}
                 </div>
 
-                {template.fields.map((field) => {
+                {template.fields.map((field, index) => {
                     const fieldValue = data[field.id] ?? field.defaultValue ?? '';
                     const showPanError = field.id === 'Pan_No' && fieldValue && !isValidPan(fieldValue);
-                    const sectionKey = getFieldSection(field);
-                    const shouldRenderSectionHeader = sectionKey !== previousSection;
+                    const sectionKey = fieldSections[index];
+                    const shouldRenderSectionHeader = index === 0 || sectionKey !== fieldSections[index - 1];
                     const sectionMeta = SECTION_META[sectionKey];
                     const isProfileLinkedField = PROFILE_LINKED_FIELD_IDS.has(field.id);
-                    const isProfileFilled = isProfileLinkedField && selectedCompanyProfileId && String(fieldValue || '').trim();
-                    previousSection = sectionKey;
+                    const profileSourceKey = PROFILE_FIELD_SOURCE_MAP[field.id];
+                    const profileSourceValue = profileSourceKey && selectedCompanyProfile ? String(selectedCompanyProfile[profileSourceKey] || '').trim() : '';
+                    const normalizedFieldValue = String(fieldValue || '').trim();
+                    const isProfileFilled = isProfileLinkedField && selectedCompanyProfileId && normalizedFieldValue && normalizedFieldValue === profileSourceValue;
+                    const isProfileEdited = isProfileLinkedField && selectedCompanyProfileId && normalizedFieldValue && profileSourceValue && normalizedFieldValue !== profileSourceValue;
 
                     return (
                         <React.Fragment key={field.id}>
@@ -468,6 +600,11 @@ const LetterForm = ({
                                         {isProfileFilled && (
                                             <span className="rounded-full border border-emerald-200 bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700">
                                                 From profile
+                                            </span>
+                                        )}
+                                        {isProfileEdited && (
+                                            <span className="rounded-full border border-amber-200 bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-700">
+                                                Edited
                                             </span>
                                         )}
                                         {field.id === 'Date' && showNepaliDateQuickFill && (
@@ -713,6 +850,109 @@ const LetterForm = ({
                         </div>
                     )}
                 </div>
+
+                {supportsAttachmentPages && (
+                    <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+                        <div>
+                            <label className="text-sm font-semibold text-slate-700 block">Attachment Pages</label>
+                            <p className="mt-1 text-xs text-slate-500">
+                                Add supporting image or PDF pages. They will be appended after the letter in preview and print.
+                            </p>
+                        </div>
+                        <label className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 text-sm text-slate-700 hover:bg-white cursor-pointer transition-colors w-fit">
+                            <Upload className="w-4 h-4" />
+                            Add Pages
+                            <input
+                                type="file"
+                                accept="image/png,image/jpeg,image/jpg,image/webp,application/pdf"
+                                multiple
+                                className="hidden"
+                                onChange={handleAttachmentPagesUpload}
+                            />
+                        </label>
+                        {attachmentPages.length > 0 && (
+                            <div className="space-y-2">
+                                {attachmentPages.map((page, index) => (
+                                    <div
+                                        key={page.id || `${page.name}-${index}`}
+                                        draggable
+                                        onDragStart={() => setDraggedAttachmentId(page.id)}
+                                        onDragOver={(event) => event.preventDefault()}
+                                        onDrop={() => {
+                                            const fromIndex = attachmentPages.findIndex((item) => item.id === draggedAttachmentId);
+                                            reorderAttachmentPages(fromIndex, index);
+                                            setDraggedAttachmentId('');
+                                        }}
+                                        onDragEnd={() => setDraggedAttachmentId('')}
+                                        className={cn(
+                                            'flex items-center gap-3 rounded-lg border bg-white p-2 transition-colors',
+                                            draggedAttachmentId === page.id ? 'border-brand-300 bg-brand-50' : 'border-slate-200'
+                                        )}
+                                    >
+                                        <div className="flex flex-col items-center gap-1 text-slate-400">
+                                            <button
+                                                type="button"
+                                                onClick={() => reorderAttachmentPages(index, index - 1)}
+                                                disabled={index === 0}
+                                                className={cn(
+                                                    'rounded p-0.5 transition-colors',
+                                                    index === 0 ? 'cursor-not-allowed text-slate-200' : 'hover:bg-slate-100 hover:text-slate-600'
+                                                )}
+                                                title="Move up"
+                                            >
+                                                <ArrowUp className="h-3.5 w-3.5" />
+                                            </button>
+                                            <button
+                                                type="button"
+                                                className="cursor-grab rounded p-1 hover:bg-slate-100"
+                                                title="Drag to reorder"
+                                            >
+                                                <GripVertical className="h-4 w-4" />
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => reorderAttachmentPages(index, index + 1)}
+                                                disabled={index === attachmentPages.length - 1}
+                                                className={cn(
+                                                    'rounded p-0.5 transition-colors',
+                                                    index === attachmentPages.length - 1 ? 'cursor-not-allowed text-slate-200' : 'hover:bg-slate-100 hover:text-slate-600'
+                                                )}
+                                                title="Move down"
+                                            >
+                                                <ArrowDown className="h-3.5 w-3.5" />
+                                            </button>
+                                        </div>
+                                        {page.type === 'image/pdf-page' ? (
+                                            <div className="flex h-14 w-12 items-center justify-center rounded border border-slate-200 bg-slate-50 text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                                                PDF
+                                            </div>
+                                        ) : (
+                                            <img
+                                                src={page.src}
+                                                alt={page.name || `Attachment page ${index + 1}`}
+                                                className="h-14 w-12 rounded border border-slate-200 object-cover"
+                                            />
+                                        )}
+                                        <div className="min-w-0 flex-1">
+                                            <p className="truncate text-sm font-medium text-slate-700">{page.name || `Attachment page ${index + 1}`}</p>
+                                            <p className="text-xs text-slate-500">
+                                                Page {index + 1} {page.sourceFileName ? `• ${page.sourceFileName}` : page.type === 'image/pdf-page' ? '• PDF' : '• Image'}
+                                            </p>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => removeAttachmentPage(page.id)}
+                                            className="inline-flex items-center gap-1 px-2 py-1 rounded border border-red-200 text-red-600 text-xs hover:bg-red-50 transition-colors"
+                                        >
+                                            <X className="w-3.5 h-3.5" />
+                                            Remove
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
         </div>
     );

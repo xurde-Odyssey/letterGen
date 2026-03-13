@@ -6,7 +6,6 @@ export const supabaseConfigError = !supabaseUrl || !supabaseAnonKey;
 
 if (supabaseConfigError) {
   // Fail fast in dev when env config is missing.
-  // eslint-disable-next-line no-console
   console.warn('Supabase env vars are missing. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.');
 }
 

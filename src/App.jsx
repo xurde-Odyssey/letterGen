@@ -163,6 +163,7 @@ function App() {
   const [loginPassword, setLoginPassword] = useState('');
   const [isLoginPasswordVisible, setIsLoginPasswordVisible] = useState(false);
   const [loginError, setLoginError] = useState('');
+  const [loginSuccess, setLoginSuccess] = useState('');
 
   const [activeTemplateId, setActiveTemplateId] = useState(() => {
     const savedTemplateId = savedDraft?.activeTemplateId;
@@ -294,8 +295,9 @@ function App() {
         if (!isMounted) return;
         setAuthSession(null);
       } finally {
-        if (!isMounted) return;
-        setAuthLoading(false);
+        if (isMounted) {
+          setAuthLoading(false);
+        }
       }
     };
 
@@ -979,10 +981,12 @@ function App() {
     });
 
     if (error) {
+      setLoginSuccess('');
       setLoginError(error.message);
       return;
     }
 
+    setLoginSuccess('Login successful. Redirecting...');
     setLoginEmail('');
     setLoginPassword('');
   };
@@ -1053,7 +1057,11 @@ function App() {
               <input
                 type="email"
                 value={loginEmail}
-                onChange={(e) => setLoginEmail(e.target.value)}
+                onChange={(e) => {
+                  setLoginEmail(e.target.value);
+                  setLoginError('');
+                  setLoginSuccess('');
+                }}
                 className="w-full p-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none text-sm"
                 placeholder="you@example.com"
                 autoComplete="email"
@@ -1065,7 +1073,11 @@ function App() {
                 <input
                   type={isLoginPasswordVisible ? 'text' : 'password'}
                   value={loginPassword}
-                  onChange={(e) => setLoginPassword(e.target.value)}
+                  onChange={(e) => {
+                    setLoginPassword(e.target.value);
+                    setLoginError('');
+                    setLoginSuccess('');
+                  }}
                   className="w-full p-3 pr-16 border border-slate-200 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none text-sm"
                   placeholder="Enter password"
                   autoComplete="current-password"
@@ -1079,6 +1091,7 @@ function App() {
                 </button>
               </div>
             </div>
+            {loginSuccess && <p className="text-sm text-emerald-600">{loginSuccess}</p>}
             {loginError && <p className="text-sm text-red-600">{loginError}</p>}
             <button
               type="submit"
@@ -1130,8 +1143,6 @@ function App() {
             companyProfiles={companyProfiles}
             selectedCompanyProfileId={selectedCompanyProfileId}
             onSelectCompanyProfile={handleCompanyProfileSelect}
-            saveStatus={saveStatus}
-            saveStatusError={saveStatusError}
             unifiedStatus={unifiedStatus}
             onSyncCompanyProfiles={refreshCompanyProfilesFromDatabase}
             companyProfilesSyncStatus={companyProfilesSyncStatus}

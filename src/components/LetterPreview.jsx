@@ -1,8 +1,16 @@
 import React from 'react';
 
+const ATTACHMENT_ENABLED_TEMPLATE_IDS = new Set([
+    'vendor-registration',
+    'payment-request',
+    'cement-bench-quotation',
+    'market-price-quotation',
+]);
+
 const LetterPreview = React.forwardRef(({ template, data, letterpadImage, zoom = 1 }, ref) => {
     if (!template) return null;
     const isMarketPriceQuotation = template.id === 'market-price-quotation';
+    const supportsAttachmentPages = ATTACHMENT_ENABLED_TEMPLATE_IDS.has(template.id);
     const isBiddingTemplate = template.group === 'bidding';
     const hasSecondPage = typeof template.secondPageContent === 'function';
     const hasThirdPage = typeof template.thirdPageContent === 'function';
@@ -98,6 +106,9 @@ const LetterPreview = React.forwardRef(({ template, data, letterpadImage, zoom =
         transform: `scale(${previewScale})`,
         transformOrigin: 'top center',
     };
+    const attachmentPages = supportsAttachmentPages && Array.isArray(data.Attachment_Pages)
+        ? data.Attachment_Pages.filter((page) => page?.src)
+        : [];
 
     return (
         <div className="flex-1 bg-slate-200 p-4 md:p-8 overflow-y-auto h-full min-h-0 print:h-auto print:bg-white print:p-0">
@@ -341,6 +352,36 @@ const LetterPreview = React.forwardRef(({ template, data, letterpadImage, zoom =
                         </div>
                     </>
                 )}
+
+                {attachmentPages.map((page, index) => (
+                    <React.Fragment key={page.id || `${page.name || 'attachment'}-${index}`}>
+                        <div className="no-print mx-auto w-[210mm] flex items-center gap-3 px-2 py-1 text-[11px] uppercase tracking-wide text-slate-500">
+                            <div className="h-px bg-slate-300 flex-1" />
+                            <span>Attachment Page {index + 1}</span>
+                            <div className="h-px bg-slate-300 flex-1" />
+                        </div>
+                        <div className="mx-auto print:w-auto" style={previewScreenWrapperStyle}>
+                            <div className="print:contents" style={previewScreenScaleStyle}>
+                                <div
+                                    className="a4-container shadow-xl mx-auto bg-white relative flex flex-col items-center justify-center print:break-before-page print:shadow-none"
+                                    style={{
+                                        width: '210mm',
+                                        height: '297mm',
+                                        margin: '0 auto',
+                                        boxSizing: 'border-box',
+                                        padding: '1.2cm',
+                                    }}
+                                >
+                                    <img
+                                        src={page.src}
+                                        alt={page.name || `Attachment page ${index + 1}`}
+                                        className="h-full w-full object-contain"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    </React.Fragment>
+                ))}
             </div>
         </div>
     );

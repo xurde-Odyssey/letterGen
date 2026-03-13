@@ -445,11 +445,6 @@ ${dynamicPricingSentences}
         ],
         content: (data) => {
             const variant = data.Letter_Variant || 'पत्र/सूचना नं रहित';
-            const noticeReference = [
-                data.Notice_Number ? `पत्र/सूचना नं. ${data.Notice_Number}` : '',
-                data.Notice_Date ? `मिति ${data.Notice_Date}` : '',
-            ].filter(Boolean).join(' ');
-            const noticeIntro = noticeReference ? `तहाँ कार्यालयको ${noticeReference} ` : '';
 
             if (variant === 'पत्र/सूचना नं सहित') {
                 return `

@@ -16,6 +16,7 @@
     "lucide-react": "^0.575.0",
     "nepali": "^1.0.2",
     "nepali-unicode": "^1.1.1",
+    "pdfjs-dist": "^5.5.207",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-to-print": "^3.2.0",
